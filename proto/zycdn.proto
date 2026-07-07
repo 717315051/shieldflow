@@ -1,0 +1,1548 @@
+syntax = "proto3";
+
+package shieldflow;
+
+option go_package = "github.com/shieldflow/shieldflow/internal/grpc/proto";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/wrappers.proto";
+
+// ============================================================================
+// ShieldFlow gRPC Proto Definitions
+// 企业级自建CDN系统 gRPC 接口定义
+// ============================================================================
+
+// ============================================================================
+// 通用响应消息
+// ============================================================================
+
+// 批量操作响应
+message BatchResponse {
+  bool success = 1;
+  int32 accepted_count = 2;
+  int32 rejected_count = 3;
+  string message = 4;
+  repeated ErrorDetail errors = 5;
+}
+
+// 错误详情
+message ErrorDetail {
+  string code = 1;
+  string message = 2;
+  string entry_id = 3;
+}
+
+// ============================================================================
+// ConfigService - 主控→节点 配置下发
+// ============================================================================
+
+service ConfigService {
+  // 下发域名配置
+  rpc PushDomainConfig(PushDomainConfigRequest) returns (PushResponse);
+  // 下发 DDoS 防护配置
+  rpc PushDDoSConfig(PushDDoSConfigRequest) returns (PushResponse);
+  // 下发全局配置
+  rpc PushGlobalConfig(PushGlobalConfigRequest) returns (PushResponse);
+  // 同步节点状态
+  rpc SyncNodeStatus(SyncNodeStatusRequest) returns (NodeStatus);
+  // 节点心跳
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+message PushDomainConfigRequest {
+  string domain_id = 1;
+  DomainConfig config = 2;
+}
+
+message PushDDoSConfigRequest {
+  DDoSConfig config = 1;
+}
+
+message PushGlobalConfigRequest {
+  GlobalConfig config = 1;
+}
+
+message PushResponse {
+  bool success = 1;
+  string message = 2;
+  string config_version = 3;
+  google.protobuf.Timestamp applied_at = 4;
+}
+
+message SyncNodeStatusRequest {
+  string node_id = 1;
+}
+
+message HeartbeatRequest {
+  string node_id = 1;
+  NodeMetrics metrics = 2;
+}
+
+message HeartbeatResponse {
+  bool acknowledged = 1;
+  google.protobuf.Timestamp server_time = 2;
+  // 主控下发指令，节点执行后回传
+  repeated NodeAction actions = 3;
+}
+
+// 节点动作指令
+message NodeAction {
+  string action_id = 1;
+  ActionType type = 2;
+  string target = 3;
+  string payload = 4;
+}
+
+enum ActionType {
+  ACTION_TYPE_UNSPECIFIED = 0;
+  ACTION_TYPE_RELOAD_CONFIG = 1;
+  ACTION_TYPE_PURGE_CACHE = 2;
+  ACTION_TYPE_RESTART_SERVICE = 3;
+  ACTION_TYPE_UPDATE_CERTIFICATE = 4;
+  ACTION_TYPE_ENABLE_MAINTENANCE = 5;
+  ACTION_TYPE_DISABLE_MAINTENANCE = 6;
+}
+
+// ============================================================================
+// LogService - 节点→主控/日志服务器 日志上报
+// ============================================================================
+
+service LogService {
+  // 上报访问日志
+  rpc ReportAccessLogs(stream AccessLogEntry) returns (BatchResponse);
+  // 上报攻击日志
+  rpc ReportAttackLogs(stream AttackLogEntry) returns (BatchResponse);
+  // 上报 DDoS 日志
+  rpc ReportDDoSLogs(stream DDoSLogEntry) returns (BatchResponse);
+  // 上报四层日志
+  rpc ReportLayer4Logs(stream Layer4LogEntry) returns (BatchResponse);
+  // 上报 AI 分析日志
+  rpc ReportAILogs(stream AILogEntry) returns (BatchResponse);
+}
+
+// 访问日志条目
+message AccessLogEntry {
+  string entry_id = 1;
+  string node_id = 2;
+  string domain_id = 3;
+  string client_ip = 4;
+  string method = 5;
+  string path = 6;
+  string query = 7;
+  string protocol = 8;
+  int32 status_code = 9;
+  int64 bytes_sent = 10;
+  int64 bytes_received = 11;
+  string referer = 12;
+  string user_agent = 13;
+  string x_forwarded_for = 14;
+  int64 response_time_ms = 15;
+  int64 upstream_response_time_ms = 16;
+  string upstream_addr = 17;
+  string cache_status = 18; // HIT/MISS/BYPASS/etc.
+  string request_id = 19;
+  google.protobuf.Timestamp timestamp = 20;
+  // 安全相关
+  bool blocked = 21;
+  string block_reason = 22;
+  string matched_rule_id = 23;
+  // 地理信息
+  string country = 24;
+  string province = 25;
+  string city = 26;
+  string isp = 27;
+  // TLS 信息
+  string tls_version = 28;
+  string tls_cipher = 29;
+}
+
+// 攻击日志条目 (7层攻击)
+message AttackLogEntry {
+  string entry_id = 1;
+  string node_id = 2;
+  string domain_id = 3;
+  string client_ip = 4;
+  AttackType attack_type = 5;
+  string matched_rule_id = 6;
+  string matched_rule_name = 7;
+  string request_method = 8;
+  string request_path = 9;
+  string request_query = 10;
+  string request_body = 11;
+  repeated string matched_patterns = 12;
+  string payload = 13;
+  Action action_taken = 14;
+  int32 risk_level = 15; // 1-10
+  string user_agent = 16;
+  string referer = 17;
+  string x_forwarded_for = 18;
+  google.protobuf.Timestamp timestamp = 19;
+  string protection_module = 20; // 黑白名单/CC/动态防护/访问控制/区域限制/Bot检测/语义WAF
+}
+
+enum AttackType {
+  ATTACK_TYPE_UNSPECIFIED = 0;
+  ATTACK_TYPE_SQL_INJECTION = 1;
+  ATTACK_TYPE_XSS = 2;
+  ATTACK_TYPE_CC_ATTACK = 3;
+  ATTACK_TYPE_PATH_TRAVERSAL = 4;
+  ATTACK_TYPE_COMMAND_INJECTION = 5;
+  ATTACK_TYPE_FILE_INCLUSION = 6;
+  ATTACK_TYPE_XXE = 7;
+  ATTACK_TYPE_CSRF = 8;
+  ATTACK_TYPE_BOT = 9;
+  ATTACK_TYPE_SCANNER = 10;
+  ATTACK_TYPE_CUSTOM_RULE = 11;
+  ATTACK_TYPE_RATE_LIMIT = 12;
+  ATTACK_TYPE_REGION_BLOCK = 13;
+  ATTACK_TYPE_IP_BLACKLIST = 14;
+}
+
+enum Action {
+  ACTION_UNSPECIFIED = 0;
+  ACTION_ALLOW = 1;
+  ACTION_BLOCK = 2;
+  ACTION_CHALLENGE = 3;
+  ACTION_CAPTCHA = 4;
+  ACTION_RATE_LIMIT = 5;
+  ACTION_LOG_ONLY = 6;
+  ACTION_REDIRECT = 7;
+  ACTION_JS_CHALLENGE = 8;
+}
+
+// DDoS 日志条目 (4层攻击)
+message DDoSLogEntry {
+  string entry_id = 1;
+  string node_id = 2;
+  string client_ip = 3;
+  string destination_ip = 4;
+  int32 destination_port = 5;
+  string protocol = 6; // TCP/UDP/ICMP
+  DDoSAttackType attack_type = 7;
+  int64 packet_count = 8;
+  int64 byte_count = 9;
+  int64 packets_per_sec = 10;
+  int64 bytes_per_sec = 11;
+  int64 connections_count = 12;
+  int64 new_connections_per_sec = 13;
+  Action action_taken = 14;
+  string mitigation_rule_id = 15;
+  int32 ban_duration_seconds = 16;
+  google.protobuf.Timestamp start_time = 17;
+  google.protobuf.Timestamp end_time = 18;
+  google.protobuf.Timestamp detected_at = 19;
+  string country = 20;
+  string isp = 21;
+}
+
+enum DDoSAttackType {
+  DDOS_ATTACK_TYPE_UNSPECIFIED = 0;
+  DDOS_ATTACK_TYPE_SYN_FLOOD = 1;
+  DDOS_ATTACK_TYPE_ACK_FLOOD = 2;
+  DDOS_ATTACK_TYPE_UDP_FLOOD = 3;
+  DDOS_ATTACK_TYPE_ICMP_FLOOD = 4;
+  DDOS_ATTACK_TYPE_SLOWLORIS = 5;
+  DDOS_ATTACK_TYPE_CONNECTION_FLOOD = 6;
+  DDOS_ATTACK_TYPE_PORT_SCAN = 7;
+  DDOS_ATTACK_TYPE_AMPLIFICATION = 8;
+  DDOS_ATTACK_TYPE_ZERO_WINDOW = 9;
+}
+
+// 四层日志条目
+message Layer4LogEntry {
+  string entry_id = 1;
+  string node_id = 2;
+  string client_ip = 3;
+  string client_port = 4;
+  string server_ip = 5;
+  int32 server_port = 6;
+  string protocol = 7;
+  int64 bytes_in = 8;
+  int64 bytes_out = 9;
+  int64 packets_in = 10;
+  int64 packets_out = 11;
+  int64 duration_ms = 12;
+  string connection_state = 13; // NEW/ESTABLISHED/CLOSED/TIMEOUT
+  bool blocked = 14;
+  string block_reason = 15;
+  google.protobuf.Timestamp connect_time = 16;
+  google.protobuf.Timestamp disconnect_time = 17;
+}
+
+// AI 分析日志条目
+message AILogEntry {
+  string entry_id = 1;
+  string node_id = 2;
+  string domain_id = 3;
+  string client_ip = 4;
+  AIAnalysisType analysis_type = 5;
+  string model_name = 6;
+  string model_version = 7;
+  float threat_score = 8; // 0.0-1.0
+  int32 confidence = 9; // 0-100
+  string prediction = 10;
+  repeated string features = 11;
+  repeated FeatureImportance feature_importances = 12;
+  Action action_taken = 13;
+  string related_log_id = 14;
+  google.protobuf.Timestamp timestamp = 15;
+  int64 inference_time_ms = 16;
+}
+
+enum AIAnalysisType {
+  AI_ANALYSIS_TYPE_UNSPECIFIED = 0;
+  AI_ANALYSIS_TYPE_BOT_DETECTION = 1;
+  AI_ANALYSIS_TYPE_DGA_DETECTION = 2;
+  AI_ANALYSIS_TYPE_ANOMALY_DETECTION = 3;
+  AI_ANALYSIS_TYPE_TRAFFIC_CLASSIFICATION = 4;
+  AI_ANALYSIS_TYPE_ATTACK_PREDICTION = 5;
+  AI_ANALYSIS_TYPE_USER_BEHAVIOR = 6;
+}
+
+message FeatureImportance {
+  string name = 1;
+  float importance = 2;
+  string value = 3;
+}
+
+// ============================================================================
+// NodeService - 节点管理
+// ============================================================================
+
+service NodeService {
+  // 注册节点
+  rpc RegisterNode(NodeInfo) returns (RegisterResponse);
+  // 更新节点状态
+  rpc UpdateNodeStatus(UpdateNodeStatusRequest) returns (UpdateResponse);
+  // 获取节点配置
+  rpc GetNodeConfig(GetNodeConfigRequest) returns (NodeConfig);
+}
+
+message NodeInfo {
+  string node_id = 1;
+  string hostname = 2;
+  string ip_address = 3;
+  string listen_address = 4;
+  int32 listen_port = 5;
+  NodeRole role = 6;
+  NodeStatus status = 7;
+  string version = 8;
+  string region = 9;
+  string zone = 10;
+  string isp = 11;
+  int64 bandwidth_mbps = 12;
+  int32 cpu_cores = 13;
+  int64 memory_mb = 14;
+  int64 disk_gb = 15;
+  repeated string supported_features = 16;
+  google.protobuf.Timestamp registered_at = 17;
+  // TLS 证书信息
+  repeated CertificateInfo certificates = 18;
+}
+
+enum NodeRole {
+  NODE_ROLE_UNSPECIFIED = 0;
+  NODE_ROLE_EDGE = 1;
+  NODE_ROLE_ORIGIN_SHIELD = 2;
+  NODE_ROLE_LOG_SERVER = 3;
+  NODE_ROLE_CONTROL = 4;
+}
+
+message NodeStatus {
+  string node_id = 1;
+  NodeState state = 2;
+  NodeMetrics metrics = 3;
+  google.protobuf.Timestamp last_heartbeat = 4;
+  int32 active_connections = 5;
+  int64 bandwidth_usage_mbps = 6;
+  int64 requests_per_sec = 7;
+  // 服务状态
+  map<string, ServiceStatus> services = 8;
+  // 健康检查
+  bool healthy = 9;
+  string health_message = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+enum NodeState {
+  NODE_STATE_UNSPECIFIED = 0;
+  NODE_STATE_ONLINE = 1;
+  NODE_STATE_OFFLINE = 2;
+  NODE_STATE_DRAINING = 3;
+  NODE_STATE_MAINTENANCE = 4;
+  NODE_STATE_OVERLOADED = 5;
+  NODE_STATE_DEGRADED = 6;
+}
+
+message NodeMetrics {
+  // CPU
+  double cpu_usage_percent = 1;
+  double cpu_load_1 = 2;
+  double cpu_load_5 = 3;
+  double cpu_load_15 = 4;
+  // 内存
+  int64 memory_total_mb = 5;
+  int64 memory_used_mb = 6;
+  int64 memory_cached_mb = 7;
+  double memory_usage_percent = 8;
+  // 磁盘
+  int64 disk_total_gb = 9;
+  int64 disk_used_gb = 10;
+  double disk_usage_percent = 11;
+  int64 disk_read_ops = 12;
+  int64 disk_write_ops = 13;
+  // 网络
+  int64 network_in_mbps = 14;
+  int64 network_out_mbps = 15;
+  int64 network_packets_in = 16;
+  int64 network_packets_out = 17;
+  int64 network_errors = 18;
+  // 连接
+  int32 active_connections = 19;
+  int32 total_connections = 20;
+  int32 time_wait_connections = 21;
+  // 业务指标
+  int64 requests_per_sec = 22;
+  int64 bandwidth_usage_mbps = 23;
+  int64 cache_hit_rate_percent = 24;
+  int64 avg_response_time_ms = 25;
+  // 4层指标
+  int64 l4_connections = 26;
+  int64 l4_packets_per_sec = 27;
+  int64 l4_bandwidth_mbps = 28;
+  // 防护指标
+  int64 blocked_requests = 29;
+  int64 blocked_ips = 30;
+  int64 mitigation_count = 31;
+  google.protobuf.Timestamp collected_at = 32;
+}
+
+message ServiceStatus {
+  string name = 1;
+  bool running = 2;
+  string state = 3;
+  int32 pid = 4;
+  google.protobuf.Timestamp started_at = 5;
+  string version = 6;
+  string error_message = 7;
+}
+
+message RegisterResponse {
+  bool success = 1;
+  string node_id = 2;
+  string message = 3;
+  string auth_token = 4;
+  // 节点注册后立即下发的初始配置
+  NodeConfig initial_config = 5;
+  google.protobuf.Timestamp registered_at = 6;
+}
+
+message UpdateNodeStatusRequest {
+  string node_id = 1;
+  NodeStatus status = 2;
+}
+
+message UpdateResponse {
+  bool success = 1;
+  string message = 2;
+  google.protobuf.Timestamp updated_at = 3;
+}
+
+message GetNodeConfigRequest {
+  string node_id = 1;
+}
+
+message NodeConfig {
+  string node_id = 1;
+  string config_version = 2;
+  GlobalConfig global_config = 3;
+  DDoSConfig ddos_config = 4;
+  repeated DomainConfig domain_configs = 5;
+  // 节点级配置
+  int32 worker_processes = 6;
+  int32 worker_connections = 7;
+  // 调度权重
+  int32 weight = 8;
+  // 节点分组/标签
+  repeated string tags = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message CertificateInfo {
+  string cert_id = 1;
+  string domain = 2;
+  string serial_number = 3;
+  string issuer = 4;
+  string subject = 5;
+  google.protobuf.Timestamp not_before = 6;
+  google.protobuf.Timestamp not_after = 7;
+  string fingerprint = 8;
+  // 证书内容 (PEM)
+  string certificate_pem = 9;
+  string private_key_pem = 10;
+  string chain_pem = 11;
+}
+
+// ============================================================================
+// CacheService - 缓存管理
+// ============================================================================
+
+service CacheService {
+  // 刷新缓存 (URL / 目录 / 全站)
+  rpc PurgeCache(PurgeCacheRequest) returns (PurgeResponse);
+  // 预热缓存
+  rpc PreheatCache(PreheatCacheRequest) returns (PreheatResponse);
+  // 获取缓存统计
+  rpc GetCacheStats(GetCacheStatsRequest) returns (CacheStats);
+}
+
+message PurgeCacheRequest {
+  string domain_id = 1;
+  repeated string urls = 2;
+  PurgeType type = 3;
+  // 目录刷新时使用
+  repeated string directories = 4;
+  // 标签刷新
+  repeated string tags = 5;
+}
+
+enum PurgeType {
+  PURGE_TYPE_UNSPECIFIED = 0;
+  PURGE_TYPE_URL = 1;
+  PURGE_TYPE_DIRECTORY = 2;
+  PURGE_TYPE_FULL = 3;
+  PURGE_TYPE_TAG = 4;
+  PURGE_TYPE_REGEX = 5;
+}
+
+message PurgeResponse {
+  bool success = 1;
+  string purge_id = 2;
+  int32 purged_count = 3;
+  int32 failed_count = 4;
+  string message = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message PreheatCacheRequest {
+  string domain_id = 1;
+  repeated string urls = 2;
+  // 预热并发数
+  int32 concurrency = 3;
+  // 是否预热到所有节点
+  bool all_nodes = 4;
+  repeated string target_nodes = 5;
+}
+
+message PreheatResponse {
+  bool success = 1;
+  string preheat_id = 2;
+  int32 queued_count = 3;
+  int32 completed_count = 4;
+  int32 failed_count = 5;
+  string message = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message GetCacheStatsRequest {
+  string domain_id = 1;
+}
+
+message CacheStats {
+  string domain_id = 1;
+  // 缓存空间
+  int64 cache_size_bytes = 2;
+  int64 cache_capacity_bytes = 3;
+  double cache_usage_percent = 4;
+  // 缓存对象数
+  int64 cached_objects = 5;
+  int64 cached_urls = 6;
+  // 命中率
+  double hit_rate_percent = 7;
+  int64 total_requests = 8;
+  int64 hit_count = 9;
+  int64 miss_count = 10;
+  int64 expired_count = 11;
+  int64 evicted_count = 12;
+  // 按状态码统计
+  map<string, int64> status_code_stats = 13;
+  // 按节点统计
+  map<string, NodeCacheStats> node_stats = 14;
+  google.protobuf.Timestamp collected_at = 15;
+}
+
+message NodeCacheStats {
+  string node_id = 1;
+  int64 cache_size_bytes = 2;
+  int64 cached_objects = 3;
+  double hit_rate_percent = 4;
+  int64 hit_count = 5;
+  int64 miss_count = 6;
+}
+
+// ============================================================================
+// AuthService - 授权验证
+// ============================================================================
+
+service AuthService {
+  // 验证 License
+  rpc VerifyLicense(VerifyLicenseRequest) returns (VerifyResponse);
+}
+
+message VerifyLicenseRequest {
+  string license_key = 1;
+  string node_id = 2;
+  // 节点硬件指纹
+  string hardware_fingerprint = 3;
+}
+
+message VerifyResponse {
+  bool valid = 1;
+  string license_id = 2;
+  LicenseType license_type = 3;
+  string customer_name = 4;
+  // 授权范围
+  int32 max_nodes = 5;
+  int64 max_bandwidth_mbps = 6;
+  int32 max_domains = 7;
+  repeated string licensed_features = 8;
+  // 有效期
+  google.protobuf.Timestamp valid_from = 9;
+  google.protobuf.Timestamp valid_until = 10;
+  // 当前使用量
+  int32 current_nodes = 11;
+  int64 current_bandwidth_mbps = 12;
+  int32 current_domains = 13;
+  string message = 14;
+  google.protobuf.Timestamp verified_at = 15;
+}
+
+enum LicenseType {
+  LICENSE_TYPE_UNSPECIFIED = 0;
+  LICENSE_TYPE_TRIAL = 1;
+  LICENSE_TYPE_STANDARD = 2;
+  LICENSE_TYPE_PROFESSIONAL = 3;
+  LICENSE_TYPE_ENTERPRISE = 4;
+  LICENSE_TYPE_ULTIMATE = 5;
+}
+
+// ============================================================================
+// 配置消息体 - DomainConfig
+// ============================================================================
+
+message DomainConfig {
+  string domain_id = 1;
+  string domain = 2;
+  repeated string aliases = 3;
+  bool enabled = 4;
+  // 源站配置
+  OriginConfig origin_config = 5;
+  // HTTPS 配置
+  HTTPSConfig https_config = 6;
+  // 缓存配置
+  CacheConfig cache_config = 7;
+  // 防护配置 (7层)
+  ProtectionConfig protection_config = 8;
+  // 自定义响应头
+  repeated CustomHeader custom_headers = 9;
+  // 自定义错误页
+  repeated CustomPage custom_pages = 10;
+  // 回源 Host
+  string origin_host = 11;
+  // 客户端请求超时
+  google.protobuf.Duration client_timeout = 12;
+  // 回源超时
+  google.protobuf.Duration origin_timeout = 13;
+  // 是否启用 WebSocket
+  bool websocket_enabled = 14;
+  // 是否启用 HTTP/2
+  bool http2_enabled = 15;
+  // 是否启用 HTTP/3 (QUIC)
+  bool http3_enabled = 16;
+  // 限速配置
+  repeated RateLimitRule rate_limits = 17;
+  // URL 重写规则
+  repeated RewriteRule rewrite_rules = 18;
+  // 配置版本
+  string config_version = 19;
+  google.protobuf.Timestamp updated_at = 20;
+}
+
+// 源站配置
+message OriginConfig {
+  repeated OriginGroup origin_groups = 1;
+  // 主源站组
+  string primary_group = 2;
+  // 备源站组
+  string secondary_group = 3;
+  // 回源协议
+  string scheme = 4; // http / https
+  // 回源 Host 头
+  string host_header = 5;
+  // 回源连接超时
+  google.protobuf.Duration connect_timeout = 6;
+  // 回源读取超时
+  google.protobuf.Duration read_timeout = 7;
+  // 回源发送超时
+  google.protobuf.Duration send_timeout = 8;
+  // 回源重试次数
+  int32 retry_count = 9;
+  // 回源保活
+  bool keepalive = 10;
+  int32 keepalive_connections = 11;
+  // 负载均衡策略
+  OriginBalanceStrategy balance_strategy = 12;
+  // 健康检查
+  OriginHealthCheck health_check = 13;
+  // 回源时是否传递客户端真实 IP
+  bool pass_client_ip = 14;
+  string client_ip_header = 15; // X-Forwarded-For / X-Real-IP
+}
+
+message OriginGroup {
+  string group_id = 1;
+  string name = 2;
+  repeated OriginServer servers = 3;
+  // 权重 (用于加权轮询)
+  int32 weight = 4;
+}
+
+message OriginServer {
+  string address = 1; // IP 或域名
+  int32 port = 2;
+  int32 weight = 3;
+  bool enabled = 4;
+  string protocol = 5; // http / https
+  bool https_verify = 6;
+  string sni = 7;
+}
+
+enum OriginBalanceStrategy {
+  ORIGIN_BALANCE_UNSPECIFIED = 0;
+  ORIGIN_BALANCE_ROUND_ROBIN = 1;
+  ORIGIN_BALANCE_WEIGHTED_ROUND_ROBIN = 2;
+  ORIGIN_BALANCE_IP_HASH = 3;
+  ORIGIN_BALANCE_LEAST_CONNECTIONS = 4;
+  ORIGIN_BALANCE_RANDOM = 5;
+}
+
+message OriginHealthCheck {
+  bool enabled = 1;
+  string path = 2;
+  int32 interval_seconds = 3;
+  int32 timeout_seconds = 4;
+  int32 healthy_threshold = 5;
+  int32 unhealthy_threshold = 6;
+  repeated int32 expected_status_codes = 7;
+  string expected_body = 8;
+}
+
+// HTTPS 配置
+message HTTPSConfig {
+  bool enabled = 1;
+  bool force_https = 2; // 强制跳转 HTTPS
+  int32 https_port = 3;
+  // TLS 证书
+  CertificateInfo certificate = 4;
+  // TLS 版本
+  repeated string tls_versions = 5; // TLSv1.2, TLSv1.3
+  // 加密套件
+  repeated string cipher_suites = 6;
+  // OCSP 装订
+  bool ocsp_stapling = 7;
+  // HSTS
+  bool hsts_enabled = 8;
+  int64 hsts_max_age_seconds = 9;
+  bool hsts_include_subdomains = 10;
+  bool hsts_preload = 11;
+  // HTTP/2
+  bool http2_enabled = 12;
+  // HTTP/3
+  bool http3_enabled = 13;
+  int32 http3_port = 14;
+  // 会话恢复
+  bool session_cache = 15;
+  int32 session_cache_size = 16;
+  google.protobuf.Duration session_timeout = 17;
+}
+
+// 缓存配置
+message CacheConfig {
+  bool enabled = 1;
+  // 默认缓存时间
+  google.protobuf.Duration default_cache_time = 2;
+  // 缓存键规则
+  string cache_key_rule = 3;
+  // 是否忽略查询参数
+  bool ignore_query_string = 4;
+  // 查询参数白名单/黑名单
+  repeated string query_param_whitelist = 5;
+  repeated string query_param_blacklist = 6;
+  // 是否忽略大小写
+  bool ignore_case = 7;
+  // 是否将 Cookie 纳入缓存键
+  bool include_cookies = 8;
+  repeated string cookie_keys = 9;
+  // 按路径缓存规则
+  repeated CacheRule cache_rules = 10;
+  // 按文件后缀缓存
+  map<string, google.protobuf.Duration> extension_cache_times = 11;
+  // 按状态码缓存
+  map<int32, google.protobuf.Duration> status_code_cache_times = 12;
+  // 边缘缓存大小
+  int64 edge_cache_size_mb = 13;
+  // 内存缓存大小
+  int64 memory_cache_size_mb = 14;
+  // 缓存淘汰策略
+  CacheEvictionPolicy eviction_policy = 15;
+  // 不缓存的 URL
+  repeated string no_cache_urls = 16;
+  // 大文件分片缓存
+  bool slice_cache_enabled = 17;
+  int64 slice_size_mb = 18;
+  // 智能预取
+  bool prefetch_enabled = 19;
+  // 过期内容 stale 复用
+  bool serve_stale_on_error = 20;
+  bool serve_stale_updating = 21;
+  google.protobuf.Duration stale_max_age = 22;
+}
+
+message CacheRule {
+  string rule_id = 1;
+  string name = 2;
+  string path_pattern = 3; // glob 或正则
+  bool regex = 4;
+  google.protobuf.Duration cache_time = 5;
+  bool override_origin = 6;
+  bool enable = 7;
+  int32 priority = 8;
+  // 缓存键额外参数
+  repeated string extra_cache_keys = 9;
+}
+
+enum CacheEvictionPolicy {
+  CACHE_EVICTION_UNSPECIFIED = 0;
+  CACHE_EVICTION_LRU = 1;
+  CACHE_EVICTION_LFU = 2;
+  CACHE_EVICTION_FIFO = 3;
+  CACHE_EVICTION_RANDOM = 4;
+}
+
+// ============================================================================
+// 配置消息体 - ProtectionConfig (7层防护)
+// 包含: 黑白名单/CC/动态防护/访问控制/区域限制/Bot检测/语义WAF
+// ============================================================================
+
+message ProtectionConfig {
+  bool enabled = 1;
+  // 1. IP 黑白名单
+  IPFilter ip_filter = 2;
+  // 2. CC 防护
+  CCProtection cc_protection = 3;
+  // 3. 动态防护
+  DynamicProtection dynamic_protection = 4;
+  // 4. 访问控制
+  AccessControl access_control = 5;
+  // 5. 区域限制
+  GeoRestriction geo_restriction = 6;
+  // 6. Bot 检测
+  BotDetection bot_detection = 7;
+  // 7. 语义 WAF
+  SemanticWAF semantic_waf = 8;
+  // 全局动作
+  Action default_action = 9;
+  // 防护模式
+  ProtectionMode mode = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+enum ProtectionMode {
+  PROTECTION_MODE_UNSPECIFIED = 0;
+  PROTECTION_MODE_OBSERVE = 1;    // 观察模式
+  PROTECTION_MODE_PROTECT = 2;    // 防护模式
+  PROTECTION_MODE_STRICT = 3;     // 严格模式
+  PROTECTION_MODE_DISABLED = 4;   // 关闭
+}
+
+// 1. IP 黑白名单
+message IPFilter {
+  bool enabled = 1;
+  repeated string blacklist = 2;       // IP / CIDR
+  repeated string whitelist = 3;       // IP / CIDR
+  repeated IPRange blacklist_ranges = 4;
+  repeated IPRange whitelist_ranges = 5;
+  // 黑名单优先级
+  bool blacklist_priority = 6;
+  // 自动封禁
+  bool auto_ban_enabled = 7;
+  int32 ban_threshold = 8;
+  google.protobuf.Duration ban_duration = 9;
+}
+
+message IPRange {
+  string start_ip = 1;
+  string end_ip = 2;
+  string cidr = 3;
+  string country = 4;
+  string isp = 5;
+  string label = 6;
+}
+
+// 2. CC 防护
+message CCProtection {
+  bool enabled = 1;
+  // 全局速率限制
+  RateLimit global_rate_limit = 2;
+  // 按路径速率限制
+  repeated PathRateLimit path_rate_limits = 3;
+  // 挑战类型
+  ChallengeType challenge_type = 4;
+  // 挑战阈值 (请求/秒)
+  int32 challenge_threshold = 5;
+  // 等候室配置
+  WaitingRoom waiting_room = 6;
+  // 人机验证
+  bool captcha_enabled = 7;
+  int32 captcha_threshold = 8;
+  // 滑动窗口大小
+  google.protobuf.Duration sliding_window = 9;
+  // 统计维度
+  repeated string rate_limit_keys = 10; // ip, path, user_agent, session
+  // 封禁配置
+  bool ban_enabled = 11;
+  int32 ban_threshold = 12;
+  google.protobuf.Duration ban_duration = 13;
+  // 紧急模式
+  bool emergency_mode = 14;
+  int32 emergency_threshold = 15;
+}
+
+message RateLimit {
+  int32 requests_per_second = 1;
+  int32 requests_per_minute = 2;
+  int32 burst = 3;
+  Action action = 4;
+}
+
+message PathRateLimit {
+  string path_pattern = 1;
+  RateLimit limit = 2;
+  bool regex = 3;
+}
+
+// 挑战类型 (8种)
+enum ChallengeType {
+  CHALLENGE_TYPE_UNSPECIFIED = 0;
+  CHALLENGE_TYPE_NONE = 1;              // 无挑战
+  CHALLENGE_TYPE_JS_CHALLENGE = 2;      // JS 挑战
+  CHALLENGE_TYPE_CAPTCHA = 3;           // 验证码
+  CHALLENGE_TYPE_RECAPTCHA = 4;         // Google reCAPTCHA
+  CHALLENGE_TYPE_HCAPTCHA = 5;          // hCaptcha
+  CHALLENGE_TYPE_TURNSTILE = 6;         // Cloudflare Turnstile
+  CHALLENGE_TYPE_SLIDER = 7;            // 滑块验证
+  CHALLENGE_TYPE_SMS = 8;               // 短信验证
+}
+
+// 等候室
+message WaitingRoom {
+  bool enabled = 1;
+  int32 max_concurrent_users = 2;
+  int32 queue_timeout_seconds = 3;
+  string waiting_room_url = 4;
+  string template_html = 5;
+  // 动态调整
+  bool dynamic_adjust = 6;
+  int32 min_concurrent_users = 7;
+  int32 max_queue_size = 8;
+  // 排队刷新间隔
+  int32 refresh_interval_seconds = 9;
+}
+
+// 3. 动态防护
+message DynamicProtection {
+  bool enabled = 1;
+  // 请求频率异常检测
+  bool frequency_anomaly = 2;
+  int32 frequency_window_seconds = 3;
+  int32 frequency_threshold = 4;
+  // 行为分析
+  bool behavior_analysis = 5;
+  // 会话熵分析
+  bool session_entropy = 6;
+  // 慢速攻击防护
+  bool slow_attack_protection = 7;
+  google.protobuf.Duration slow_request_threshold = 8;
+  int32 slow_body_rate_bytes_per_sec = 9;
+  // 突发流量检测
+  bool burst_detection = 10;
+  int32 burst_multiplier = 11;
+  // 自动学习基线
+  bool auto_baseline = 12;
+  google.protobuf.Duration baseline_window = 13;
+  // 响应动作
+  Action action = 14;
+  // AI 增强
+  bool ai_enabled = 15;
+  string ai_model = 16;
+}
+
+// 4. 访问控制
+message AccessControl {
+  bool enabled = 1;
+  // 基于 URL 的访问控制
+  repeated URLAccessRule url_rules = 2;
+  // 基于方法的访问控制
+  repeated string allowed_methods = 3;
+  repeated string blocked_methods = 4;
+  // 基于 Referer 的访问控制
+  repeated RefererRule referer_rules = 5;
+  // 基于时间的访问控制
+  repeated TimeAccessRule time_rules = 6;
+  // 基于 User-Agent 的访问控制
+  repeated string blocked_user_agents = 7;
+  repeated string allowed_user_agents = 8;
+  // Token 验证
+  bool token_auth_enabled = 9;
+  string token_header = 10;
+  // IP 白名单访问
+  repeated string admin_ips = 11;
+  // Basic Auth
+  bool basic_auth_enabled = 12;
+  string realm = 13;
+}
+
+message URLAccessRule {
+  string rule_id = 1;
+  string path_pattern = 2;
+  bool regex = 3;
+  Action action = 4;
+  string description = 5;
+  int32 priority = 6;
+}
+
+message RefererRule {
+  string pattern = 1;
+  bool regex = 2;
+  Action action = 3;
+  bool allow_empty = 4;
+}
+
+message TimeAccessRule {
+  string path_pattern = 1;
+  // cron 表达式或时间范围
+  string start_time = 2;
+  string end_time = 3;
+  repeated string weekdays = 4;
+  Action action = 5;
+}
+
+// 5. 区域限制
+message GeoRestriction {
+  bool enabled = 1;
+  // 模式: 黑名单/白名单
+  GeoMode mode = 2;
+  // 国家代码 (ISO 3166-1 alpha-2)
+  repeated string countries = 3;
+  // 省份
+  repeated string provinces = 4;
+  // 城市
+  repeated string cities = 5;
+  // ISP
+  repeated string isps = 6;
+  // ASN
+  repeated int32 asns = 7;
+  // IP 库类型
+  GeoIPDatabase ip_database = 8;
+  // 异常处理
+  Action fallback_action = 9;
+}
+
+enum GeoMode {
+  GEO_MODE_UNSPECIFIED = 0;
+  GEO_MODE_BLACKLIST = 1;
+  GEO_MODE_WHITELIST = 2;
+}
+
+enum GeoIPDatabase {
+  GEO_IP_DB_UNSPECIFIED = 0;
+  GEO_IP_DB_MAXMIND = 1;
+  GEO_IP_DB_IP2REGION = 2;
+  GEO_IP_DB_QQWRY = 3;
+  GEO_IP_DB_CUSTOM = 4;
+}
+
+// 6. Bot 检测
+message BotDetection {
+  bool enabled = 1;
+  // 好机器人白名单 (搜索引擎)
+  repeated string good_bots = 2;
+  // 坏机器人特征
+  repeated string bad_bot_patterns = 3;
+  // JS 指纹检测
+  bool js_fingerprint = 4;
+  // TLS 指纹检测 (JA3)
+  bool tls_fingerprint = 5;
+  // HTTP/2 指纹
+  bool http2_fingerprint = 6;
+  // 浏览器特征检测
+  bool browser_check = 7;
+  // 行为分析
+  bool behavior_analysis = 8;
+  // AI 检测
+  bool ai_detection = 9;
+  string ai_model = 10;
+  // 验证挑战
+  ChallengeType challenge_type = 11;
+  // 已知机器人 IP
+  repeated string known_bot_ips = 12;
+  // 已知爬虫 UA 列表
+  repeated string known_crawler_uas = 13;
+  // 阈值
+  int32 suspicion_threshold = 14;
+  Action action = 15;
+  // verified bot 白名单 (Cloudflare 风格)
+  bool verified_bot_whitelist = 16;
+  repeated string verified_bots = 17;
+}
+
+// 7. 语义 WAF
+message SemanticWAF {
+  bool enabled = 1;
+  // 规则集
+  repeated WAFRuleSet rule_sets = 2;
+  // OWASP CRS
+  bool owasp_crs_enabled = 3;
+  string owasp_crs_version = 4;
+  // 敏感数据泄露防护
+  bool data_leak_protection = 5;
+  // 虚拟补丁
+  repeated VirtualPatch virtual_patches = 6;
+  // 语义分析引擎
+  bool semantic_analysis = 7;
+  // SQL 注入语义分析
+  bool sql_injection_analysis = 8;
+  // XSS 语义分析
+  bool xss_analysis = 9;
+  // 命令注入语义分析
+  bool command_injection_analysis = 10;
+  // 路径穿越语义分析
+  bool path_traversal_analysis = 11;
+  // AST 分析
+  bool ast_analysis = 12;
+  // AI 辅助分析
+  bool ai_assisted = 13;
+  string ai_model = 14;
+  // 请求体检测
+  bool inspect_request_body = 15;
+  int64 max_body_size_kb = 16;
+  // 响应体检测
+  bool inspect_response_body = 17;
+  // 自定义规则
+  repeated WAFRule custom_rules = 18;
+  // 异常评分
+  bool anomaly_scoring = 19;
+  int32 critical_threshold = 20;
+  int32 error_threshold = 21;
+  int32 warning_threshold = 22;
+  int32 notice_threshold = 23;
+}
+
+message WAFRuleSet {
+  string rule_set_id = 1;
+  string name = 2;
+  string version = 3;
+  bool enabled = 4;
+  int32 priority = 5;
+  repeated WAFRule rules = 6;
+}
+
+message WAFRule {
+  string rule_id = 1;
+  string name = 2;
+  string description = 3;
+  // 匹配条件
+  repeated WAFCondition conditions = 4;
+  // 逻辑运算符
+  LogicalOperator operator = 5;
+  // 动作
+  Action action = 6;
+  // 严重等级
+  WAFSeverity severity = 7;
+  // 标签
+  repeated string tags = 8;
+  bool enabled = 9;
+  int32 priority = 10;
+}
+
+message WAFCondition {
+  // 检测目标
+  WAFTarget target = 1;
+  // 匹配操作
+  WAFOperator operator = 2;
+  // 匹配值
+  string value = 3;
+  // 是否正则
+  bool regex = 4;
+  // 转换函数
+  repeated WAFTransform transforms = 5;
+}
+
+enum WAFTarget {
+  WAF_TARGET_UNSPECIFIED = 0;
+  WAF_TARGET_URL = 1;
+  WAF_TARGET_QUERY_STRING = 2;
+  WAF_TARGET_ARGS = 3;
+  WAF_TARGET_REQUEST_HEADERS = 4;
+  WAF_TARGET_REQUEST_BODY = 5;
+  WAF_TARGET_COOKIES = 6;
+  WAF_TARGET_USER_AGENT = 7;
+  WAF_TARGET_REFERER = 8;
+  WAF_TARGET_METHOD = 9;
+  WAF_TARGET_XML = 10;
+  WAF_TARGET_JSON = 11;
+}
+
+enum WAFOperator {
+  WAF_OP_UNSPECIFIED = 0;
+  WAF_OP_EQUALS = 1;
+  WAF_OP_NOT_EQUALS = 2;
+  WAF_OP_CONTAINS = 3;
+  WAF_OP_NOT_CONTAINS = 4;
+  WAF_OP_STARTS_WITH = 5;
+  WAF_OP_ENDS_WITH = 6;
+  WAF_OP_REGEX = 7;
+  WAF_OP_EXISTS = 8;
+  WAF_OP_NOT_EXISTS = 9;
+  WAF_OP_GT = 10;
+  WAF_OP_LT = 11;
+  WAF_OP_GE = 12;
+  WAF_OP_LE = 13;
+  WAF_OP_IN = 14;
+  WAF_OP_NOT_IN = 15;
+}
+
+enum WAFTransform {
+  WAF_TRANSFORM_UNSPECIFIED = 0;
+  WAF_TRANSFORM_LOWERCASE = 1;
+  WAF_TRANSFORM_UPPERCASE = 2;
+  WAF_TRANSFORM_URL_DECODE = 3;
+  WAF_TRANSFORM_URL_ENCODE = 4;
+  WAF_TRANSFORM_HTML_ENTITY_DECODE = 5;
+  WAF_TRANSFORM_HTML_ENTITY_ENCODE = 6;
+  WAF_TRANSFORM_BASE64_DECODE = 7;
+  WAF_TRANSFORM_BASE64_ENCODE = 8;
+  WAF_TRANSFORM_HEX_DECODE = 9;
+  WAF_TRANSFORM_HEX_ENCODE = 10;
+  WAF_TRANSFORM_JS_DECODE = 11;
+  WAF_TRANSFORM_NORMALIZE_PATH = 12;
+  WAF_TRANSFORM_COMPRESS_WHITESPACE = 13;
+  WAF_TRANSFORM_REMOVE_WHITESPACE = 14;
+  WAF_TRANSFORM_REPLACE_NULL = 15;
+  WAF_TRANSFORM_LENGTH = 16;
+}
+
+enum LogicalOperator {
+  LOGICAL_OP_UNSPECIFIED = 0;
+  LOGICAL_OP_AND = 1;
+  LOGICAL_OP_OR = 2;
+  LOGICAL_OP_NOT = 3;
+}
+
+enum WAFSeverity {
+  WAF_SEVERITY_UNSPECIFIED = 0;
+  WAF_SEVERITY_CRITICAL = 1;
+  WAF_SEVERITY_ERROR = 2;
+  WAF_SEVERITY_WARNING = 3;
+  WAF_SEVERITY_NOTICE = 4;
+  WAF_SEVERITY_INFO = 5;
+}
+
+message VirtualPatch {
+  string patch_id = 1;
+  string cve_id = 2;
+  string name = 3;
+  string description = 4;
+  WAFRule rule = 5;
+  bool enabled = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+// ============================================================================
+// 配置消息体 - DDoSConfig
+// ============================================================================
+
+message DDoSConfig {
+  bool enabled = 1;
+  // 连接数限制
+  int32 max_connections_per_ip = 2;
+  int32 new_connections_per_sec = 3;
+  // 包速率限制
+  int32 max_packets_per_sec = 4;
+  int32 max_packets_per_sec_per_ip = 5;
+  // 带宽限制
+  int64 max_bandwidth_per_ip_mbps = 6;
+  int64 max_bandwidth_total_mbps = 7;
+  // 自动封禁
+  bool auto_ban_enabled = 8;
+  int32 ban_threshold_connections = 9;
+  int32 ban_threshold_packets = 10;
+  int32 ban_threshold_bandwidth_mbps = 11;
+  int32 ban_duration_seconds = 12;
+  // 黑白名单
+  repeated string blacklist = 13;
+  repeated string whitelist = 14;
+  // 区域黑名单
+  repeated string geo_blacklist = 15;
+  repeated string geo_whitelist = 16;
+  // ASN 黑名单
+  repeated int32 asn_blacklist = 17;
+  // 协议防护
+  bool syn_flood_protection = 18;
+  int32 syn_cookies = 19;
+  bool ack_flood_protection = 20;
+  bool udp_flood_protection = 21;
+  bool icmp_flood_protection = 22;
+  int32 icmp_rate_limit = 23;
+  // SYN 代理
+  bool syn_proxy = 24;
+  int32 syn_retries = 25;
+  // 连接复用
+  bool connection_reuse = 26;
+  // 慢速攻击
+  bool slow_attack_protection = 27;
+  int32 slow_header_rate = 28;
+  int32 slow_body_rate = 29;
+  google.protobuf.Duration slow_timeout = 30;
+  // TCP 状态检测
+  bool tcp_state_inspection = 31;
+  // 零窗口检测
+  bool zero_window_protection = 32;
+  int32 zero_window_threshold = 33;
+  // 源验证
+  bool source_authentication = 34;
+  // 全局阈值 (触发全局防护)
+  int32 global_pps_threshold = 35;
+  int64 global_bps_threshold = 36;
+  // 弹性扩容
+  bool elastic_scaling = 37;
+  // 学习模式
+  bool learning_mode = 38;
+  google.protobuf.Duration learning_duration = 39;
+  // 防护等级
+  DDoSProtectionLevel level = 40;
+  google.protobuf.Timestamp updated_at = 41;
+}
+
+enum DDoSProtectionLevel {
+  DDOS_LEVEL_UNSPECIFIED = 0;
+  DDOS_LEVEL_LOW = 1;
+  DDOS_LEVEL_MEDIUM = 2;
+  DDOS_LEVEL_HIGH = 3;
+  DDOS_LEVEL_CRITICAL = 4;
+}
+
+// ============================================================================
+// 配置消息体 - GlobalConfig
+// ============================================================================
+
+message GlobalConfig {
+  string config_version = 1;
+  // 全局 DDoS 配置
+  DDoSConfig ddos_config = 2;
+  // 全局防护模式
+  ProtectionMode protection_mode = 3;
+  // 日志配置
+  LogConfig log_config = 4;
+  // 监控配置
+  MonitoringConfig monitoring_config = 5;
+  // 节点调度策略
+  SchedulePolicy schedule_policy = 6;
+  // DNS 配置
+  DNSConfig dns_config = 7;
+  // 全局限速
+  RateLimit global_rate_limit = 8;
+  // 证书自动签发
+  bool auto_cert_enabled = 9;
+  string cert_provider = 10; // letsencrypt / zerossl
+  // 通知配置
+  NotificationConfig notification_config = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+message LogConfig {
+  // 日志保留天数
+  int32 access_log_retention_days = 1;
+  int32 attack_log_retention_days = 2;
+  int32 ddos_log_retention_days = 3;
+  // 日志采样率 (0-100)
+  int32 access_log_sample_rate = 4;
+  // 日志上报间隔
+  google.protobuf.Duration report_interval = 5;
+  // 日志批量大小
+  int32 batch_size = 6;
+  // 日志服务器地址
+  string log_server_address = 7;
+  // 是否记录请求体
+  bool log_request_body = 8;
+  int64 max_body_log_size_kb = 9;
+  // 敏感字段脱敏
+  repeated string masked_fields = 10;
+}
+
+message MonitoringConfig {
+  bool enabled = 1;
+  string prometheus_endpoint = 2;
+  google.protobuf.Duration scrape_interval = 3;
+  // 告警规则
+  repeated AlertRule alert_rules = 4;
+  // 时序数据库
+  string tsdb_address = 5;
+}
+
+message AlertRule {
+  string rule_id = 1;
+  string name = 2;
+  string expression = 3;
+  string condition = 4;
+  double threshold = 5;
+  google.protobuf.Duration duration = 6;
+  repeated string notification_channels = 7;
+  bool enabled = 8;
+}
+
+message SchedulePolicy {
+  // 调度策略
+  ScheduleStrategy strategy = 1;
+  // 健康检查
+  bool health_check_enabled = 2;
+  google.protobuf.Duration health_check_interval = 3;
+  // 故障转移
+  bool failover_enabled = 4;
+  // 权重调整
+  bool dynamic_weight = 5;
+  // 地理调度
+  bool geo_routing = 6;
+  // ISP 调度
+  bool isp_routing = 7;
+}
+
+enum ScheduleStrategy {
+  SCHEDULE_STRATEGY_UNSPECIFIED = 0;
+  SCHEDULE_STRATEGY_ROUND_ROBIN = 1;
+  SCHEDULE_STRATEGY_WEIGHTED = 2;
+  SCHEDULE_STRATEGY_GEO = 3;
+  SCHEDULE_STRATEGY_ISP = 4;
+  SCHEDULE_STRATEGY_LATENCY = 5;
+  SCHEDULE_STRATEGY_CAPACITY = 6;
+}
+
+message DNSConfig {
+  // DNS 服务器
+  repeated string nameservers = 1;
+  // DNS TTL
+  int32 default_ttl = 2;
+  // DNSSEC
+  bool dnssec_enabled = 3;
+  // 智能解析
+  bool smart_resolution = 4;
+  // 解析线路
+  repeated ResolutionLine lines = 5;
+}
+
+message ResolutionLine {
+  string name = 1;
+  repeated string countries = 2;
+  repeated string isps = 3;
+  repeated string node_ids = 4;
+  int32 weight = 5;
+}
+
+message NotificationConfig {
+  // 通知渠道
+  repeated NotificationChannel channels = 1;
+  // 通知级别
+  repeated string alert_levels = 2;
+  // 静默期
+  google.protobuf.Duration silence_period = 3;
+}
+
+message NotificationChannel {
+  string channel_id = 1;
+  string name = 2;
+  NotificationType type = 3;
+  string webhook_url = 4;
+  map<string, string> config = 5;
+  bool enabled = 6;
+}
+
+enum NotificationType {
+  NOTIFICATION_TYPE_UNSPECIFIED = 0;
+  NOTIFICATION_TYPE_WEBHOOK = 1;
+  NOTIFICATION_TYPE_EMAIL = 2;
+  NOTIFICATION_TYPE_DINGTALK = 3;
+  NOTIFICATION_TYPE_WECHAT = 4;
+  NOTIFICATION_TYPE_TELEGRAM = 5;
+  NOTIFICATION_TYPE_SLACK = 6;
+  NOTIFICATION_TYPE_SMS = 7;
+}
+
+// ============================================================================
+// 辅助消息
+// ============================================================================
+
+message CustomHeader {
+  string name = 1;
+  string value = 2;
+  HeaderOp op = 3;
+}
+
+enum HeaderOp {
+  HEADER_OP_UNSPECIFIED = 0;
+  HEADER_OP_ADD = 1;
+  HEADER_OP_SET = 2;
+  HEADER_OP_REMOVE = 3;
+  HEADER_OP_APPEND = 4;
+}
+
+message CustomPage {
+  int32 status_code = 1;
+  string content_type = 2;
+  string body = 3;
+  // 是否从文件加载
+  string file_path = 4;
+}
+
+message RateLimitRule {
+  string rule_id = 1;
+  string name = 2;
+  string path_pattern = 3;
+  bool regex = 4;
+  int32 requests_per_second = 5;
+  int32 requests_per_minute = 6;
+  int32 burst = 7;
+  Action action = 8;
+  // 统计维度
+  repeated string keys = 9;
+}
+
+message RewriteRule {
+  string rule_id = 1;
+  string name = 2;
+  string pattern = 3;
+  string replacement = 4;
+  bool regex = 5;
+  // 重写目标
+  RewriteTarget target = 6;
+  int32 priority = 7;
+  bool enabled = 8;
+}
+
+enum RewriteTarget {
+  REWRITE_TARGET_UNSPECIFIED = 0;
+  REWRITE_TARGET_URL = 1;
+  REWRITE_TARGET_PATH = 2;
+  REWRITE_TARGET_QUERY = 3;
+  REWRITE_TARGET_HOST = 4;
+}

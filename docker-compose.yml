@@ -1,0 +1,158 @@
+# ============================================================================
+# ShieldFlow Docker Compose 编排 (可选)
+# 用法:
+#   docker compose up -d              # 启动全部服务
+#   docker compose up -d master       # 仅启动主控
+#   docker compose up -d edge         # 仅启动边缘节点
+# 前置: 先构建镜像  docker compose build
+# ============================================================================
+version: "3.8"
+
+services:
+  # ---------- 基础设施 ----------
+  postgres:
+    image: postgres:14-alpine
+    container_name: shieldflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: shieldflow_cdn
+      POSTGRES_USER: shieldflow
+      POSTGRES_PASSWORD: "${ShieldFlow_DB_PASS:-change_me_123}"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./sql/001_init_postgresql.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - shieldflow-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shieldflow -d shieldflow_cdn"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.11-alpine
+    container_name: shieldflow-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: shieldflow_cdn
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: "${ShieldFlow_CH_PASS:-}"
+    volumes:
+      - ch_data:/var/lib/clickhouse
+      - ./sql/002_init_clickhouse.sql:/docker-entrypoint-initdb.d/002_init.sql:ro
+    ports:
+      - "9000:9000"
+      - "8123:8123"
+    networks:
+      - shieldflow-net
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: shieldflow-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - shieldflow-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------- ShieldFlow 主控 ----------
+  master:
+    build: .
+    image: shieldflow/shieldflow:latest
+    container_name: shieldflow-master
+    restart: unless-stopped
+    command: master
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ShieldFlow_DB_PASS: "${ShieldFlow_DB_PASS:-change_me_123}"
+      ShieldFlow_JWT_SECRET: "${ShieldFlow_JWT_SECRET:-change_me_jwt_secret}"
+    volumes:
+      - master_configs:/etc/shieldflow
+      - master_logs:/var/log/shieldflow
+      - master_cache:/var/cache/shieldflow
+    ports:
+      - "8080:8080"     # Backend API
+      - "50051:50051"   # gRPC
+    networks:
+      - shieldflow-net
+
+  # ---------- ShieldFlow 边缘节点 ----------
+  edge:
+    build: .
+    image: shieldflow/shieldflow:latest
+    container_name: shieldflow-edge
+    restart: unless-stopped
+    command: edge
+    depends_on:
+      - master
+    environment:
+      ShieldFlow_NODE_ID: "edge-docker-01"
+      ShieldFlow_MASTER_ADDR: "master:50051"
+    volumes:
+      - edge_configs:/etc/shieldflow
+      - edge_logs:/var/log/shieldflow
+      - edge_cache:/var/cache/shieldflow
+    ports:
+      - "80:80"
+      - "443:443"
+      - "9527:9527"
+    networks:
+      - shieldflow-net
+
+  # ---------- Nginx 管理后台反代 ----------
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: shieldflow-nginx
+    restart: unless-stopped
+    depends_on:
+      - master
+    volumes:
+      - ./deploy/nginx/shieldflow.conf:/etc/nginx/conf.d/shieldflow.conf:ro
+      - nginx_certs:/etc/shieldflow/certs:ro
+      - master_cache:/usr/local/shieldflow/web:ro
+    ports:
+      - "4430:443"
+      - "800:80"
+    networks:
+      - shieldflow-net
+
+networks:
+  shieldflow-net:
+    driver: bridge
+
+volumes:
+  pg_data:
+  ch_data:
+  redis_data:
+  master_configs:
+  master_logs:
+  master_cache:
+  edge_configs:
+  edge_logs:
+  edge_cache:
+  nginx_certs:

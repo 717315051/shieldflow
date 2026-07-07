@@ -1,0 +1,30 @@
+server:
+  port: 9528
+
+database:
+  host: localhost
+  port: 5432
+  name: shieldflow_cdn
+  user: shieldflow
+  password: your_password
+
+sync:
+  interval: 300  # 秒
+  retry: 3
+
+providers:
+  cloudflare:
+    enabled: false
+    api_token: ""
+  aliyun:
+    enabled: false
+    access_key_id: ""
+    access_key_secret: ""
+  tencent:
+    enabled: false
+    secret_id: ""
+    secret_key: ""
+
+log:
+  level: info
+  output: /var/log/shieldflow/dns-sync.log

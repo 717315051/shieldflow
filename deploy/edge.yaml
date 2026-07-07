@@ -1,0 +1,74 @@
+# ============================================================================
+# ShieldFlow Edge 边缘节点配置模板 (edge.yaml)
+# 组件: cmd/edge  →  Supervisor: shieldflow-edge:shieldflow-edge
+# 部署路径: /etc/shieldflow/edge.yaml
+# ============================================================================
+node:
+  id: "edge-default-01"               # 必须唯一，主控注册时使用
+  region: "cn-east-1"                 # 节点所在区域
+  license_key: "CHANGE_ME_LICENSE_KEY"
+
+grpc:
+  server: "127.0.0.1:50051"           # 主控 gRPC 地址
+  tls: false
+  cert: /etc/shieldflow/certs/edge.crt
+  key: /etc/shieldflow/certs/edge.key
+  token: "CHANGE_ME_NODE_TOKEN"
+
+proxy:
+  http_port: 80
+  https_port: 443
+  cert_file: /etc/shieldflow/certs/edge.crt
+  key_file: /etc/shieldflow/certs/edge.key
+
+waf:
+  enabled: true
+  mode: block                         # block / detect
+  threshold: 60                       # 0-100，触发阈值
+
+cache:
+  enabled: true
+  path: /var/cache/shieldflow
+  max_size: "50GB"
+  ttl: "10m"
+  compress: gzip                      # gzip / br
+
+ddos:
+  enabled: true
+  max_connections_per_ip: 100
+  new_connections_per_sec: 50
+  max_packets_per_sec: 5000
+  auto_ban_enabled: true
+  ban_threshold_connections: 200
+  ban_threshold_packets: 10000
+  ban_duration_seconds: 3600
+  blacklist:
+    - "0.0.0.0/8"
+  whitelist:
+    - "127.0.0.1/32"
+
+cc:
+  enabled: true
+  global_rate_limit: 1000
+  global_window: "1s"
+  challenge_type: js                  # js / captcha / redirect
+  waiting_room:
+    enabled: false
+    max_concurrent: 5000
+    base_wait_ms: 1000
+    increment_ms: 500
+    max_wait_ms: 30000
+
+bot:
+  enabled: true
+  allow_search_engines: true
+  block_scanners: true
+  block_scrapers: false
+  block_no_ua: true
+
+# 源站池（示例；实际由主控 gRPC 下发覆盖）
+origins:
+  - addr: "127.0.0.1:8080"
+    weight: 100
+    scheme: "http"
+    host: "origin.example.com"

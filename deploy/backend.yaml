@@ -1,0 +1,58 @@
+# ============================================================================
+# ShieldFlow 后端 API 服务配置模板 (backend.yaml)
+# 组件: cmd/backend  →  Supervisor: shieldflow-master:shieldflow-backend
+# 部署路径: /etc/shieldflow/backend.yaml
+# ============================================================================
+server:
+  host: 0.0.0.0
+  port: 8080
+  mode: production            # development / production
+
+database:
+  driver: postgres
+  host: 127.0.0.1
+  port: 5432
+  name: shieldflow_cdn
+  user: shieldflow
+  password: "CHANGE_ME_STRONG_PASSWORD"
+  max_open_conns: 100
+  max_idle_conns: 10
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  password: ""
+  db: 0
+
+jwt:
+  secret: "CHANGE_ME_TO_RANDOM_64_CHAR_STRING"
+  expire: 24h
+
+clickhouse:
+  host: 127.0.0.1
+  port: 9000
+  database: shieldflow_cdn
+  username: default
+  password: ""
+
+grpc:
+  port: 50051
+  tls: false
+  cert: /etc/shieldflow/certs/server.crt
+  key: /etc/shieldflow/certs/server.key
+
+ai:
+  provider: openai
+  model: gpt-4o-mini
+  api_key: ""
+  enabled: false
+  base_url: "https://api.openai.com/v1"
+
+acme:
+  directory: "https://acme-v02.api.letsencrypt.org/directory"
+  email: "admin@example.com"
+
+log:
+  level: info                 # debug / info / warn / error
+  format: json                # json / console
+  output: /var/log/shieldflow/backend.log

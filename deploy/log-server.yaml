@@ -1,0 +1,33 @@
+# ============================================================================
+# ShieldFlow 独立日志服务器配置 (v1.2.0+)
+#
+# 部署路径: /etc/shieldflow/log-server.yaml
+# Supervisor: shieldflow:shieldflow-log-server
+# ============================================================================
+
+server:
+  port: 9529
+  # 鉴权 token，客户端通过 Authorization: Bearer <token> 携带
+  # 为空则跳过鉴权（仅建议内网/开发环境使用）
+  auth_token: "your-secret-token"
+
+clickhouse:
+  host: localhost
+  port: 9000
+  database: shieldflow_cdn
+  username: default
+  password: ""
+
+writer:
+  # 缓冲通道大小（每类日志独立缓冲）
+  buffer_size: 10000
+  # 每批写入条数（达到即触发 flush）
+  batch_size: 1000
+  # 定时 flush 间隔（秒），即便未达 batch_size 也会写入
+  flush_interval: 5
+  # 写入失败重试次数（指数退避）
+  retry: 3
+
+log:
+  level: info
+  output: /var/log/shieldflow/log-server.log
