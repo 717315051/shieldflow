@@ -17,7 +17,12 @@ import (
 // GetTrafficStats 流量统计: 总流量/请求/带宽/缓存命中率
 // GET /api/v1/traffic/stats
 func GetTrafficStats(c *gin.Context) {
-	ch, ok := c.MustGet("ch").(driver.Conn)
+	raw, exists := c.Get("ch")
+	ch, ok := raw.(driver.Conn)
+	if !exists || !ok || ch == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{"list": []interface{}{}, "total": 0}})
+		return
+	}
 	if !ok {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": 1, "message": "统计服务不可用"})
 		return
@@ -87,7 +92,12 @@ func GetTrafficStats(c *gin.Context) {
 // GetTrafficRanking 指标排行: Top IP/攻击IP/URL/UA/状态码
 // GET /api/v1/traffic/ranking
 func GetTrafficRanking(c *gin.Context) {
-	ch, ok := c.MustGet("ch").(driver.Conn)
+	raw, exists := c.Get("ch")
+	ch, ok := raw.(driver.Conn)
+	if !exists || !ok || ch == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{"list": []interface{}{}, "total": 0}})
+		return
+	}
 	if !ok {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": 1, "message": "统计服务不可用"})
 		return
@@ -167,7 +177,12 @@ func GetTrafficRanking(c *gin.Context) {
 // GetBandwidthTrend 带宽趋势
 // GET /api/v1/traffic/bandwidth
 func GetBandwidthTrend(c *gin.Context) {
-	ch, ok := c.MustGet("ch").(driver.Conn)
+	raw, exists := c.Get("ch")
+	ch, ok := raw.(driver.Conn)
+	if !exists || !ok || ch == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{"list": []interface{}{}, "total": 0}})
+		return
+	}
 	if !ok {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": 1, "message": "统计服务不可用"})
 		return
@@ -229,7 +244,12 @@ func GetBandwidthTrend(c *gin.Context) {
 // GetCacheStats 缓存命中率统计
 // GET /api/v1/traffic/cache
 func GetCacheStats(c *gin.Context) {
-	ch, ok := c.MustGet("ch").(driver.Conn)
+	raw, exists := c.Get("ch")
+	ch, ok := raw.(driver.Conn)
+	if !exists || !ok || ch == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{"list": []interface{}{}, "total": 0}})
+		return
+	}
 	if !ok {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": 1, "message": "统计服务不可用"})
 		return

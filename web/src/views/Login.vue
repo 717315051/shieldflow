@@ -5,6 +5,7 @@ import { message } from 'ant-design-vue'
 import { UserOutlined, LockOutlined, SafetyOutlined } from '@ant-design/icons-vue'
 import { useUserStore } from '../store/user'
 import { authApi } from '../api'
+import request from '../utils/request'
 
 const router = useRouter()
 const route = useRoute()
@@ -26,9 +27,16 @@ const rules = {
   captcha: [{ required: true, message: '请输入验证码', trigger: 'blur' }],
 }
 
-function refreshCaptcha() {
-  form.captchaId = String(Date.now())
-  captchaSrc.value = authApi.captcha() + '&id=' + form.captchaId
+async function refreshCaptcha() {
+  try {
+    const res = await request.get('/auth/captcha?t=' + Date.now())
+    if (res && res.data) {
+      captchaSrc.value = res.data.image
+      form.captchaId = res.data.captcha_id
+    }
+  } catch (e) {
+    console.error('获取验证码失败', e)
+  }
 }
 
 async function handleSubmit() {
@@ -36,7 +44,7 @@ async function handleSubmit() {
     await formRef.value.validate()
     loading.value = true
     await userStore.login({
-      username: form.username,
+      account: form.username,
       password: form.password,
       captcha: form.captcha,
       captcha_id: form.captchaId,

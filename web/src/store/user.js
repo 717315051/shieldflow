@@ -8,8 +8,8 @@ export const useUserStore = defineStore('user', () => {
 
   const isLogin = computed(() => !!token.value)
   const isAdmin = computed(() => {
-    const roles = userInfo.value?.roles || []
-    return Array.isArray(roles) ? roles.includes('admin') : roles === 'admin'
+    const role = userInfo.value?.role
+    return role === 'admin'
   })
 
   async function login(payload) {

@@ -135,22 +135,26 @@ func queryAccessLogs(c *gin.Context, ch driver.Conn, table string) {
 // GetAccessLogs 访问日志
 // GET /api/v1/logs/access
 func GetAccessLogs(c *gin.Context) {
-	ch, ok := c.MustGet("ch").(driver.Conn)
-	if !ok {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": 1, "message": "日志服务不可用"})
+	raw, exists := c.Get("ch")
+	ch, ok := raw.(driver.Conn)
+	if !exists || !ok || ch == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{"list": []interface{}{}, "total": 0}})
 		return
 	}
+
 	queryAccessLogs(c, ch, "access_logs")
 }
 
 // GetAttackLogs 拦截日志
 // GET /api/v1/logs/attack
 func GetAttackLogs(c *gin.Context) {
-	ch, ok := c.MustGet("ch").(driver.Conn)
-	if !ok {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": 1, "message": "日志服务不可用"})
+	raw, exists := c.Get("ch")
+	ch, ok := raw.(driver.Conn)
+	if !exists || !ok || ch == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{"list": []interface{}{}, "total": 0}})
 		return
 	}
+
 
 	userID := c.MustGet("user_id").(uint)
 	db := c.MustGet("db").(*gorm.DB)
@@ -238,11 +242,13 @@ func GetAttackLogs(c *gin.Context) {
 // GetLayer4Logs 四层转发日志
 // GET /api/v1/logs/layer4
 func GetLayer4Logs(c *gin.Context) {
-	ch, ok := c.MustGet("ch").(driver.Conn)
-	if !ok {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": 1, "message": "日志服务不可用"})
+	raw, exists := c.Get("ch")
+	ch, ok := raw.(driver.Conn)
+	if !exists || !ok || ch == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{"list": []interface{}{}, "total": 0}})
 		return
 	}
+
 
 	userID := c.MustGet("user_id").(uint)
 	db := c.MustGet("db").(*gorm.DB)
@@ -326,11 +332,13 @@ func GetLayer4Logs(c *gin.Context) {
 // GetLayer4InterceptLogs 四层拦截日志
 // GET /api/v1/logs/layer4-intercept
 func GetLayer4InterceptLogs(c *gin.Context) {
-	ch, ok := c.MustGet("ch").(driver.Conn)
-	if !ok {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": 1, "message": "日志服务不可用"})
+	raw, exists := c.Get("ch")
+	ch, ok := raw.(driver.Conn)
+	if !exists || !ok || ch == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{"list": []interface{}{}, "total": 0}})
 		return
 	}
+
 
 	userID := c.MustGet("user_id").(uint)
 	db := c.MustGet("db").(*gorm.DB)
@@ -416,11 +424,13 @@ func GetLayer4InterceptLogs(c *gin.Context) {
 // GetAILogs AI调用日志
 // GET /api/v1/logs/ai
 func GetAILogs(c *gin.Context) {
-	ch, ok := c.MustGet("ch").(driver.Conn)
-	if !ok {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": 1, "message": "日志服务不可用"})
+	raw, exists := c.Get("ch")
+	ch, ok := raw.(driver.Conn)
+	if !exists || !ok || ch == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{"list": []interface{}{}, "total": 0}})
 		return
 	}
+
 
 	userID := c.MustGet("user_id").(uint)
 	db := c.MustGet("db").(*gorm.DB)
@@ -503,11 +513,13 @@ func GetAILogs(c *gin.Context) {
 // ExportLogs 日志导出 CSV/JSON
 // POST /api/v1/logs/export
 func ExportLogs(c *gin.Context) {
-	ch, ok := c.MustGet("ch").(driver.Conn)
-	if !ok {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": 1, "message": "日志服务不可用"})
+	raw, exists := c.Get("ch")
+	ch, ok := raw.(driver.Conn)
+	if !exists || !ok || ch == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{"list": []interface{}{}, "total": 0}})
 		return
 	}
+
 
 	var req struct {
 		LogType   string `json:"log_type" binding:"required"` // access / attack / layer4 / layer4_intercept / ai
@@ -617,11 +629,13 @@ func ExportLogs(c *gin.Context) {
 // GetLogMap 日志地图: 地理位置分布
 // GET /api/v1/logs/map
 func GetLogMap(c *gin.Context) {
-	ch, ok := c.MustGet("ch").(driver.Conn)
-	if !ok {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": 1, "message": "日志服务不可用"})
+	raw, exists := c.Get("ch")
+	ch, ok := raw.(driver.Conn)
+	if !exists || !ok || ch == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{"list": []interface{}{}, "total": 0}})
 		return
 	}
+
 
 	userID := c.MustGet("user_id").(uint)
 	db := c.MustGet("db").(*gorm.DB)

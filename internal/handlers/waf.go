@@ -27,9 +27,10 @@ import (
 
 // wafGetCH 获取 ClickHouse 连接，不可用时返回 false 并已响应错误。
 func wafGetCH(c *gin.Context) (driver.Conn, bool) {
-	ch, ok := c.MustGet("ch").(driver.Conn)
-	if !ok {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": 1, "message": "日志服务不可用"})
+	raw, exists := c.Get("ch")
+	ch, ok := raw.(driver.Conn)
+	if !exists || !ok || ch == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{"list": []interface{}{}, "total": 0}})
 		return nil, false
 	}
 	return ch, true
