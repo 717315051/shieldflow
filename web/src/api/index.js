@@ -7,6 +7,9 @@ export const authApi = {
   profile: () => request.get('/auth/profile'),
   updateProfile: (data) => request.put('/auth/profile', data),
   captcha: () => `/api/v1/auth/captcha?t=${Date.now()}`,
+  forgotPassword: (email) => request.post('/auth/forgot-password', { email }),
+  resetPassword: (email, code, newPassword) =>
+    request.post('/auth/reset-password', { email, code, new_password: newPassword }),
 }
 
 // ============ 仪表盘 ============
@@ -169,6 +172,26 @@ export const adminBackupApi = {
     request.get(`/admin/backups/${id}/download`, { responseType: 'blob' }),
 }
 
+// ============ 管理端 - WAF ============
+export const wafApi = {
+  dashboard: () => request.get('/admin/waf/dashboard'),
+  config: () => request.get('/admin/waf/config'),
+  updateConfig: (data) => request.put('/admin/waf/config', data),
+  logs: (params) => request.get('/admin/waf/logs', { params }),
+  analysis: (params) => request.get('/admin/waf/analysis', { params }),
+}
+
+// ============ 管理端 - AI ============
+export const aiApi = {
+  dashboard: () => request.get('/admin/ai/dashboard'),
+  tokenStats: (params) => request.get('/admin/ai/token-stats', { params }),
+  costAnalysis: (params) => request.get('/admin/ai/cost-analysis', { params }),
+  models: (params) => request.get('/admin/ai/models', { params }),
+  createModel: (data) => request.post('/admin/ai/models', data),
+  updateModel: (id, data) => request.put(`/admin/ai/models/${id}`, data),
+  deleteModel: (id) => request.delete(`/admin/ai/models/${id}`),
+}
+
 export default {
   authApi,
   dashboardApi,
@@ -186,4 +209,6 @@ export default {
   adminDdosApi,
   adminSystemApi,
   adminBackupApi,
+  wafApi,
+  aiApi,
 }

@@ -65,6 +65,70 @@ type PathRateRule struct {
 	Window time.Duration `json:"window"`
 }
 
+// EnhancedCCConfig 加强版 CC 防护配置（多层策略 + 优先级）。
+type EnhancedCCConfig struct {
+	// DefaultPassTTL 默认验证通过 TTL（秒）。
+	DefaultPassTTL int `json:"default_pass_ttl"`
+	// DefaultBanTTL 默认封禁 TTL（秒）。
+	DefaultBanTTL int `json:"default_ban_ttl"`
+	// AdaptiveEnabled 自适应阈值开关。
+	AdaptiveEnabled bool `json:"adaptive_enabled"`
+	// AdaptiveMinRatio 自适应最小倍率。
+	AdaptiveMinRatio float64 `json:"adaptive_min_ratio"`
+	// AdaptiveMaxRatio 自适应最大倍率。
+	AdaptiveMaxRatio float64 `json:"adaptive_max_ratio"`
+	// BaselineWindow 基线窗口（秒）。
+	BaselineWindow int `json:"baseline_window"`
+	// Layers 策略层级（按 Priority 从小到大依次匹配）。
+	Layers []CCLayer `json:"layers"`
+}
+
+// CCLayer 加强版 CC 防护策略层。
+type CCLayer struct {
+	// Name 层级名称。
+	Name string `json:"name"`
+	// Priority 优先级（越小越高）。
+	Priority int `json:"priority"`
+	// Enabled 状态。
+	Enabled bool `json:"enabled"`
+	// Scope 作用范围：global / path。
+	Scope string `json:"scope"`
+	// PathPattern 路径匹配（Scope=path 时生效）。
+	PathPattern string `json:"path_pattern"`
+	// StatObject 统计对象：ip / session。
+	StatObject string `json:"stat_object"`
+	// Threshold 请求数阈值。
+	Threshold int `json:"threshold"`
+	// Window 时间窗口（秒）。
+	Window int `json:"window"`
+	// Action 动作：verify / block / ban。
+	Action string `json:"action"`
+	// BanDuration 封禁时长（秒）。
+	BanDuration int `json:"ban_duration"`
+	// ResponsePhase 响应阶段：request / response。
+	ResponsePhase string `json:"response_phase"`
+}
+
+// SmartCCConfig 智能 CC 防护配置（自动阈值推算）。
+type SmartCCConfig struct {
+	// Enabled 智能 CC 开关。
+	Enabled bool `json:"enabled"`
+	// Level 级别：loose / medium / strict。
+	Level string `json:"level"`
+	// LastCalcTime 上次计算时间。
+	LastCalcTime time.Time `json:"last_calc_time"`
+	// AutoThresholds 系统托管的阈值（覆盖 enhancedCC.Layers）。
+	AutoThresholds []CCLayer `json:"auto_thresholds"`
+}
+
+// AccessLogSummary 访问摘要（供智能 CC 推算阈值）。
+type AccessLogSummary struct {
+	TotalRequests int64   `json:"total_requests"`
+	UniqueIPs     int64   `json:"unique_ips"`
+	PeakIPRequests int64  `json:"peak_ip_requests"`
+	BaselineRate  float64 `json:"baseline_rate"` // 单 IP 基线速率（请求/秒）
+}
+
 // Engine CC 防护引擎。
 type Engine struct {
 	mu       sync.RWMutex
@@ -73,6 +137,13 @@ type Engine struct {
 	pathCounters map[string]map[string]*slidingCounter // ip -> path -> 计数
 	currentConcurrent map[string]int // ip -> 当前并发
 	passedChallenges  map[string]int64 // ip -> 挑战通过时间(unix秒)
+
+	// enhancedCC 加强版 CC 配置（多层策略+优先级）。
+	enhancedCC *EnhancedCCConfig
+	// smartCC 智能 CC 配置（自动阈值推算）。
+	smartCC *SmartCCConfig
+	// layerCounters 加强版 CC 各层级的计数器: layerName -> ip -> counter。
+	layerCounters map[string]map[string]*slidingCounter
 }
 
 // NewEngine 创建 CC 防护引擎。
@@ -110,6 +181,7 @@ func NewEngine(cfg CCConfig) *Engine {
 		pathCounters:      map[string]map[string]*slidingCounter{},
 		currentConcurrent: map[string]int{},
 		passedChallenges:  map[string]int64{},
+		layerCounters:     map[string]map[string]*slidingCounter{},
 	}
 }
 
@@ -118,6 +190,96 @@ func (e *Engine) UpdateConfig(cfg CCConfig) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.cfg = cfg
+}
+
+// SetEnhancedCC 设置加强版 CC 防护配置。
+func (e *Engine) SetEnhancedCC(cfg EnhancedCCConfig) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.enhancedCC = &cfg
+}
+
+// SetSmartCC 设置智能 CC 防护配置。
+func (e *Engine) SetSmartCC(cfg SmartCCConfig) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.smartCC = &cfg
+}
+
+// CalculateSmartCC 根据近 24h 访问摘要推算智能 CC 阈值。
+//
+// loose: 基线*3, medium: 基线*2, strict: 基线*1.5
+// 返回推算后的 CCLayer 列表，并更新 smartCC.AutoThresholds。
+func (e *Engine) CalculateSmartCC(summary AccessLogSummary) []CCLayer {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	baseline := summary.BaselineRate
+	if baseline <= 0 {
+		// 回退：用高峰 IP 请求量估算基线速率（假设 24h 窗口）。
+		if summary.PeakIPRequests > 0 {
+			baseline = float64(summary.PeakIPRequests) / 86400.0
+		} else if summary.UniqueIPs > 0 {
+			baseline = float64(summary.TotalRequests) / float64(summary.UniqueIPs) / 86400.0
+		} else {
+			baseline = 1.0 / 60.0 // 默认 1 请求/分钟
+		}
+	}
+
+	level := "medium"
+	if e.smartCC != nil && e.smartCC.Level != "" {
+		level = e.smartCC.Level
+	}
+	var ratio float64
+	switch level {
+	case "loose":
+		ratio = 3.0
+	case "strict":
+		ratio = 1.5
+	default: // medium
+		ratio = 2.0
+	}
+
+	// 阈值 = 基线速率 * 倍率 * 窗口（60 秒）。
+	windowSec := 60
+	threshold := int(baseline*ratio) * windowSec
+	if threshold < 10 {
+		threshold = 10
+	}
+
+	layers := []CCLayer{
+		{
+			Name:          "smart_global",
+			Priority:      0,
+			Enabled:       true,
+			Scope:         "global",
+			StatObject:    "ip",
+			Threshold:     threshold,
+			Window:        windowSec,
+			Action:        "verify",
+			ResponsePhase: "request",
+		},
+		{
+			Name:          "smart_path",
+			Priority:      10,
+			Enabled:       true,
+			Scope:         "global",
+			StatObject:    "ip",
+			Threshold:     threshold / 2,
+			Window:        windowSec,
+			Action:        "block",
+			BanDuration:   600,
+			ResponsePhase: "request",
+		},
+	}
+
+	if e.smartCC == nil {
+		e.smartCC = &SmartCCConfig{}
+	}
+	e.smartCC.AutoThresholds = layers
+	e.smartCC.LastCalcTime = time.Now()
+
+	return layers
 }
 
 // Allow 判断请求是否允许通过。
@@ -134,6 +296,65 @@ func (e *Engine) Allow(ip string, r *http.Request) bool {
 			return true
 		}
 		delete(e.passedChallenges, ip)
+	}
+
+	// ===== 加强版 CC 防护（多层策略+优先级）=====
+	// 如果 smartCC.Enabled，则 enhancedCC.Layers 被 smartCC.AutoThresholds 覆盖。
+	var layers []CCLayer
+	if e.smartCC != nil && e.smartCC.Enabled && len(e.smartCC.AutoThresholds) > 0 {
+		layers = e.smartCC.AutoThresholds
+	} else if e.enhancedCC != nil && len(e.enhancedCC.Layers) > 0 {
+		layers = e.enhancedCC.Layers
+	}
+	if len(layers) > 0 {
+		// 按优先级从小到大排序（稳定排序，避免打乱相同优先级）。
+		sortedLayers := make([]CCLayer, len(layers))
+		copy(sortedLayers, layers)
+		for i := 1; i < len(sortedLayers); i++ {
+			for j := i; j > 0 && sortedLayers[j-1].Priority > sortedLayers[j].Priority; j-- {
+				sortedLayers[j-1], sortedLayers[j] = sortedLayers[j], sortedLayers[j-1]
+			}
+		}
+		for _, layer := range sortedLayers {
+			if !layer.Enabled {
+				continue
+			}
+			// 路径匹配。
+			if layer.Scope == "path" && layer.PathPattern != "" {
+				if !strings.HasPrefix(r.URL.Path, layer.PathPattern) {
+					continue
+				}
+			}
+			// 获取或创建该层的计数器。
+			window := time.Duration(layer.Window) * time.Second
+			if window <= 0 {
+				window = time.Minute
+			}
+			ipCounters, ok := e.layerCounters[layer.Name]
+			if !ok {
+				ipCounters = map[string]*slidingCounter{}
+				e.layerCounters[layer.Name] = ipCounters
+			}
+			lc, ok := ipCounters[ip]
+			if !ok {
+				lc = newSlidingCounter(window)
+				ipCounters[ip] = lc
+			}
+			lc.add(1)
+			if lc.count() > layer.Threshold {
+				// 命中阈值：执行动作。
+				switch layer.Action {
+				case "ban":
+					// 封禁：标记通过挑战失效并拒绝。
+					delete(e.passedChallenges, ip)
+					return false
+				case "block":
+					return false
+				case "verify":
+					return false // 触发挑战
+				}
+			}
+		}
 	}
 
 	// 全局频控。

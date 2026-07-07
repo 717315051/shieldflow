@@ -66,6 +66,8 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, ch interface{}, rdb interface{
 		auth.PUT("/profile", authHandler.UpdateProfile)
 		auth.PUT("/password", authHandler.ChangePassword)
 		auth.POST("/realname", authHandler.Realname)
+		auth.POST("/forgot-password", authHandler.ForgotPassword)
+		auth.POST("/reset-password", authHandler.ResetPassword)
 	}
 
 	// ==================== 域名管理 ====================
@@ -256,6 +258,22 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, ch interface{}, rdb interface{
 		admin.DELETE("/ddos/whitelist/:id", DDoSWhitelistDelete)
 		admin.GET("/ddos/logs", DDoSConnectionLogs)
 		admin.GET("/ddos/intercept-logs", DDoSInterceptLogs)
+
+		// WAF防护管理
+		admin.GET("/waf/dashboard", WAFDashboard)
+		admin.GET("/waf/config", WAFConfigGet)
+		admin.PUT("/waf/config", WAFConfigUpdate)
+		admin.GET("/waf/logs", WAFLogs)
+		admin.GET("/waf/analysis", WAFAttackAnalysis)
+
+		// AI管理
+		admin.GET("/ai/dashboard", AIDashboard)
+		admin.GET("/ai/token-stats", AITokenStats)
+		admin.GET("/ai/cost-analysis", AICostAnalysis)
+		admin.GET("/ai/models", AIModelList)
+		admin.POST("/ai/models", AIModelCreate)
+		admin.PUT("/ai/models/:id", AIModelUpdate)
+		admin.DELETE("/ai/models/:id", AIModelDelete)
 
 		// 系统设置
 		admin.GET("/system/settings", SystemSettingsGet)

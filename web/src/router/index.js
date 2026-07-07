@@ -16,6 +16,12 @@ const routes = [
     meta: { public: true },
   },
   {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('../views/ForgotPassword.vue'),
+    meta: { public: true },
+  },
+  {
     path: '/',
     component: () => import('../layouts/UserLayout.vue'),
     redirect: '/dashboard',
@@ -111,6 +117,18 @@ const routes = [
         name: 'AdminDDoS',
         component: () => import('../views/admin/DDoS.vue'),
         meta: { title: 'DDoS防护', admin: true },
+      },
+      {
+        path: 'waf',
+        name: 'AdminWAF',
+        component: () => import('../views/admin/WAF.vue'),
+        meta: { title: 'WAF管理', admin: true },
+      },
+      {
+        path: 'ai',
+        name: 'AdminAI',
+        component: () => import('../views/admin/AI.vue'),
+        meta: { title: 'AI防护', admin: true },
       },
       {
         path: 'system',

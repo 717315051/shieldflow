@@ -21,6 +21,9 @@ import (
 
 // LayerSwitch 控制每层中间件的开关状态。
 type LayerSwitch struct {
+	// ProtectionEnabled 防护总开关：false 时跳过所有防护直接转发源站。
+	ProtectionEnabled bool
+
 	Blacklist     bool
 	CC            bool
 	AccessControl bool
@@ -74,6 +77,7 @@ func NewMiddlewareChain(
 ) *MiddlewareChain {
 	return &MiddlewareChain{
 		sw: LayerSwitch{
+			ProtectionEnabled: true,
 			Blacklist: true, CC: true, AccessControl: true,
 			Region: true, Bot: true, WAF: true, Cache: true,
 		},
@@ -149,6 +153,15 @@ func (c *MiddlewareChain) SetAntiLeech(allowedDomains []string, allowEmpty bool)
 // Handler 返回包裹完整中间件链的 http.Handler。
 func (c *MiddlewareChain) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// ===== 防护总开关：关闭时跳过所有防护直接转发源站 =====
+		c.blacklistMu.RLock()
+		sw := c.sw
+		c.blacklistMu.RUnlock()
+		if !sw.ProtectionEnabled {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		ip := clientIP(r)
 
 		// ===== 0. IP 白名单：直接放行 =====
@@ -158,7 +171,7 @@ func (c *MiddlewareChain) Handler(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		sw := c.sw
+		sw = c.sw
 		c.blacklistMu.RUnlock()
 
 		// ===== 1. 黑白名单 =====

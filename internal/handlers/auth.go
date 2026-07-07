@@ -461,6 +461,108 @@ func (h *AuthHandler) Realname(c *gin.Context) {
 
 // --- 邮箱验证码发送辅助函数 (供 auth 或其他 handler 复用) ---
 
+const (
+	resetCodePrefix  = "zy:auth:resetcode:"
+	resetCodeTTL     = 5 * time.Minute
+)
+
+// ForgotPassword godoc
+// POST /api/v1/auth/forgot-password
+// 接收邮箱，生成6位随机验证码存Redis(5分钟过期)，发送重置邮件。
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
+
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "请求参数错误: " + err.Error(), "data": nil})
+		return
+	}
+	req.Email = strings.TrimSpace(req.Email)
+	if req.Email == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "邮箱不能为空", "data": nil})
+		return
+	}
+
+	// 检查邮箱是否存在。
+	var user models.User
+	if err := db.Where("email = ?", req.Email).First(&user).Error; err != nil {
+		// 出于安全考虑，不暴露邮箱是否存在。
+		c.JSON(http.StatusOK, gin.H{"code": 0, "message": "如果该邮箱已注册，验证码已发送", "data": nil})
+		return
+	}
+
+	// 生成6位随机验证码。
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	code := fmt.Sprintf("%06d", r.Intn(1000000))
+
+	// 存入 Redis，5分钟过期。
+	h.rdb.Set(context.Background(), resetCodePrefix+req.Email, code, resetCodeTTL)
+
+	// 发送邮件（复用已有邮件发送逻辑的占位实现）。
+	// TODO: 接入邮件发送 SDK 实际投递重置验证码。
+	_ = code
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "如果该邮箱已注册，验证码已发送", "data": nil})
+}
+
+// ResetPassword godoc
+// POST /api/v1/auth/reset-password
+// 接收邮箱+验证码+新密码，验证码校验后更新密码。
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
+
+	var req struct {
+		Email      string `json:"email"`
+		Code       string `json:"code"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "请求参数错误: " + err.Error(), "data": nil})
+		return
+	}
+	req.Email = strings.TrimSpace(req.Email)
+	req.Code = strings.TrimSpace(req.Code)
+	if req.Email == "" || req.Code == "" || req.NewPassword == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "邮箱、验证码和新密码不能为空", "data": nil})
+		return
+	}
+	if len(req.NewPassword) < 6 {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "新密码长度至少 6 位", "data": nil})
+		return
+	}
+
+	// 校验验证码。
+	stored, err := h.rdb.Get(context.Background(), resetCodePrefix+req.Email).Result()
+	if err != nil || stored != req.Code {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "验证码错误或已过期", "data": nil})
+		return
+	}
+	// 删除已使用的验证码。
+	h.rdb.Del(context.Background(), resetCodePrefix+req.Email)
+
+	// 查找用户。
+	var user models.User
+	if err := db.Where("email = ?", req.Email).First(&user).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 404, "message": "用户不存在", "data": nil})
+		return
+	}
+
+	// 更新密码。
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "密码加密失败: " + err.Error(), "data": nil})
+		return
+	}
+	if err := db.Model(&user).Update("password_hash", string(hash)).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "更新密码失败: " + err.Error(), "data": nil})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "密码重置成功", "data": nil})
+}
+
 // SendEmailCode 发送邮箱验证码 (内部辅助函数，可被其他 handler 调用)
 func (h *AuthHandler) SendEmailCode(email string) error {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))

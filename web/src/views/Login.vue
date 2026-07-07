@@ -120,7 +120,8 @@ onMounted(() => {
           </a-button>
         </a-form-item>
         <div class="login-footer">
-          <router-link to="/register">没有账号？立即注册</router-link>
+          <router-link to="/forgot-password">忘记密码？</router-link>
+          <router-link to="/register" style="margin-left: 16px">没有账号？立即注册</router-link>
         </div>
       </a-form>
     </div>

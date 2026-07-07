@@ -7,6 +7,8 @@ import {
   ClusterOutlined,
   CrownOutlined,
   ThunderboltOutlined,
+  SafetyOutlined,
+  RobotOutlined,
   SettingOutlined,
   DatabaseOutlined,
   LogoutOutlined,
@@ -26,6 +28,8 @@ const menus = [
   { key: 'nodes', icon: ClusterOutlined, label: '节点管理', path: '/admin/nodes' },
   { key: 'packages', icon: CrownOutlined, label: '套餐管理', path: '/admin/packages' },
   { key: 'ddos', icon: ThunderboltOutlined, label: 'DDoS防护', path: '/admin/ddos' },
+  { key: 'waf', icon: SafetyOutlined, label: 'WAF管理', path: '/admin/waf' },
+  { key: 'ai', icon: RobotOutlined, label: 'AI防护', path: '/admin/ai' },
   { key: 'system', icon: SettingOutlined, label: '系统设置', path: '/admin/system' },
   { key: 'backup', icon: DatabaseOutlined, label: '数据备份', path: '/admin/backup' },
 ]

@@ -40,7 +40,13 @@ type Config struct {
 	// 黑白名单
 	Blacklist []string `json:"blacklist"`
 	Whitelist []string `json:"whitelist"`
+
+	// UseIPSet 是否使用 ipset 管理黑白名单（而非 nftables）。
+	UseIPSet bool `json:"use_ipset"`
 }
+
+// ipsetBlacklistName ipset 黑名单集合名称。
+const ipsetBlacklistName = "shieldflow-blacklist"
 
 // Guard DDoS 防护管理器。
 type Guard struct {
@@ -82,7 +88,11 @@ func NewGuard(cfg Config) *Guard {
 		connCount: map[string]int{},
 		pktCount:  map[string]*slidingCounter{},
 	}
-	// 应用初始黑白名单到 nftables。
+	// 如果启用 ipset，初始化 ipset 集合。
+	if cfg.UseIPSet {
+		g.initIPSet()
+	}
+	// 应用初始黑白名单到 nftables / ipset。
 	g.applyBlacklist()
 	g.applyWhitelist()
 	// 启动封禁过期清理。
@@ -171,8 +181,12 @@ func (g *Guard) banLocked(ip, reason string) {
 		unbanAt: time.Now().Add(dur),
 		reason:  reason,
 	}
-	// 下发 nftables drop 规则（stub）。
-	g.nftBan(ip, dur)
+	// 下发封禁规则：ipset 或 nftables。
+	if g.cfg.UseIPSet {
+		g.ipsetBan(ip, dur)
+	} else {
+		g.nftBan(ip, dur)
+	}
 }
 
 // isBlacklistedLocked 判断 IP 是否在配置黑名单（支持 CIDR）。
@@ -186,17 +200,25 @@ func (g *Guard) isWhitelistedLocked(ip string) bool {
 }
 
 func (g *Guard) applyBlacklist() {
-	// 实际下发 nftables：nft add element ip shieldflow-ddos blacklist { ip }
+	// 实际下发 nftables / ipset：nft add element ip shieldflow-ddos blacklist { ip }
 	// 这里是 stub，记录到日志即可。
 	for _, ip := range g.cfg.Blacklist {
-		g.nftBan(ip, 0)
+		if g.cfg.UseIPSet {
+			g.ipsetBan(ip, 0)
+		} else {
+			g.nftBan(ip, 0)
+		}
 	}
 }
 
 func (g *Guard) applyWhitelist() {
-	// 实际下发 nftables 白名单集合。
+	// 实际下发 nftables / ipset 白名单集合。
 	for _, ip := range g.cfg.Whitelist {
-		g.nftAllow(ip)
+		if g.cfg.UseIPSet {
+			g.ipsetAllow(ip)
+		} else {
+			g.nftAllow(ip)
+		}
 	}
 }
 
@@ -214,6 +236,36 @@ func (g *Guard) nftBan(ip string, dur time.Duration) {
 // nftAllow 下发 nftables 白名单规则（stub）。
 func (g *Guard) nftAllow(ip string) {
 	_ = ip
+}
+
+// initIPSet 初始化 ipset 黑名单集合。
+//
+// 执行: ipset create shieldflow-blacklist hash:ip timeout 0
+// 若集合已存在则忽略错误（ipset restore 幂等）。
+func (g *Guard) initIPSet() {
+	// 尝试创建集合，若已存在则忽略错误。
+	_ = exec.Command("ipset", "create", ipsetBlacklistName, "hash:ip", "timeout", "0").Run()
+}
+
+// ipsetBan 通过 ipset 封禁 IP。
+//
+// 执行: ipset add shieldflow-blacklist <ip> [timeout <dur>s]
+// dur > 0 时附带超时（自动解封），dur == 0 表示永久封禁。
+func (g *Guard) ipsetBan(ip string, dur time.Duration) {
+	if dur > 0 {
+		_ = exec.Command("ipset", "add", ipsetBlacklistName, ip,
+			"timeout", fmt.Sprintf("%d", int(dur.Seconds())),
+			"-!").Run()
+	} else {
+		_ = exec.Command("ipset", "add", ipsetBlacklistName, ip, "-!").Run()
+	}
+}
+
+// ipsetAllow 通过 ipset 解封 IP（从黑名单集合移除）。
+//
+// 执行: ipset del shieldflow-blacklist <ip>
+func (g *Guard) ipsetAllow(ip string) {
+	_ = exec.Command("ipset", "del", ipsetBlacklistName, ip, "-!").Run()
 }
 
 // evictor 定期清理过期封禁。

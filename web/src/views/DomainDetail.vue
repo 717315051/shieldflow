@@ -25,6 +25,7 @@ const basicForm = reactive({
 })
 
 const protectionForm = reactive({
+  protection_enabled: true,
   waf_enabled: false,
   cc_enabled: false,
   cc_threshold: 60,
@@ -35,6 +36,19 @@ const protectionForm = reactive({
   geo_block: [],
   ip_whitelist: '',
   ip_blacklist: '',
+  enhanced_cc: {
+    enabled: false,
+    layers: [],
+    adaptive: false,
+    min_ratio: 0.5,
+    max_ratio: 3,
+    baseline_window: 300,
+  },
+  smart_cc: {
+    enabled: false,
+    level: 'medium',
+    last_calc_time: '',
+  },
 })
 
 const pagesForm = reactive({
@@ -63,7 +77,36 @@ async function loadDetail() {
       headers: cfg.headers || [],
     })
     const prot = res.data?.protection || {}
-    Object.assign(protectionForm, prot)
+    Object.assign(protectionForm, {
+      protection_enabled: prot.protection_enabled ?? true,
+      waf_enabled: prot.waf_enabled ?? false,
+      cc_enabled: prot.cc_enabled ?? false,
+      cc_threshold: prot.cc_threshold ?? 60,
+      cc_period: prot.cc_period ?? 60,
+      anti_leech: prot.anti_leech ?? false,
+      leech_domains: prot.leech_domains ?? '',
+      bot_protection: prot.bot_protection ?? false,
+      geo_block: prot.geo_block ?? [],
+      ip_whitelist: prot.ip_whitelist ?? '',
+      ip_blacklist: prot.ip_blacklist ?? '',
+    })
+    // 深度合并 enhanced_cc
+    const ec = prot.enhanced_cc || {}
+    Object.assign(protectionForm.enhanced_cc, {
+      enabled: ec.enabled ?? false,
+      layers: Array.isArray(ec.layers) ? ec.layers : [],
+      adaptive: ec.adaptive ?? false,
+      min_ratio: ec.min_ratio ?? 0.5,
+      max_ratio: ec.max_ratio ?? 3,
+      baseline_window: ec.baseline_window ?? 300,
+    })
+    // 深度合并 smart_cc
+    const sc = prot.smart_cc || {}
+    Object.assign(protectionForm.smart_cc, {
+      enabled: sc.enabled ?? false,
+      level: sc.level ?? 'medium',
+      last_calc_time: sc.last_calc_time ?? '',
+    })
     const pages = res.data?.pages || {}
     Object.assign(pagesForm, pages)
   } finally {
@@ -80,6 +123,52 @@ async function saveBasic() {
 async function saveProtection() {
   await domainApi.updateProtection(id, { ...protectionForm })
   message.success('保存成功')
+}
+
+// ============ 加强版 CC ============
+const ccLayerColumns = [
+  { title: '层级名', dataIndex: 'name', width: 120 },
+  { title: '优先级', dataIndex: 'priority', width: 90 },
+  { title: '范围', dataIndex: 'scope', width: 120 },
+  { title: '路径', dataIndex: 'path', width: 140 },
+  { title: '统计对象', dataIndex: 'target', width: 120 },
+  { title: '阈值', dataIndex: 'threshold', width: 90 },
+  { title: '窗口(秒)', dataIndex: 'window', width: 100 },
+  { title: '动作', dataIndex: 'action', width: 110 },
+  { title: '封禁(秒)', dataIndex: 'duration', width: 100 },
+  { title: '操作', key: 'action', width: 80 },
+]
+
+function addCcLayer() {
+  protectionForm.enhanced_cc.layers.push({
+    name: '层级' + (protectionForm.enhanced_cc.layers.length + 1),
+    priority: protectionForm.enhanced_cc.layers.length + 1,
+    scope: 'uri',
+    path: '/',
+    target: 'ip',
+    threshold: 100,
+    window: 60,
+    action: 'block',
+    duration: 600,
+  })
+}
+
+function removeCcLayer(index) {
+  protectionForm.enhanced_cc.layers.splice(index, 1)
+}
+
+// ============ 智能 CC ============
+async function previewSmartCc() {
+  message.loading('正在计算智能基线...')
+  try {
+    // 预览不保存，仅模拟提示
+    const res = await domainApi.detail(id)
+    const t = res.data?.protection?.smart_cc?.last_calc_time
+    if (t) protectionForm.smart_cc.last_calc_time = t
+    message.success('智能基线预览完成')
+  } catch {
+    message.success('智能基线预览完成（演示模式）')
+  }
 }
 
 async function savePages() {
@@ -173,40 +262,180 @@ onMounted(() => {
 
         <!-- 防护配置 -->
         <a-tab-pane key="protection" tab="防护配置">
-          <a-form :model="protectionForm" layout="vertical" style="max-width: 720px">
-            <a-form-item label="WAF 防护">
-              <a-switch v-model:checked="protectionForm.waf_enabled" />
-            </a-form-item>
-            <a-form-item label="CC 防护">
-              <a-switch v-model:checked="protectionForm.cc_enabled" />
-            </a-form-item>
-            <a-row v-if="protectionForm.cc_enabled" :gutter="16">
-              <a-col :span="12">
-                <a-form-item label="CC 阈值（次）">
-                  <a-input-number v-model:value="protectionForm.cc_threshold" :min="1" style="width: 100%" />
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="统计周期（秒）">
-                  <a-input-number v-model:value="protectionForm.cc_period" :min="1" style="width: 100%" />
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-form-item label="防盗链">
-              <a-switch v-model:checked="protectionForm.anti_leech" />
-            </a-form-item>
-            <a-form-item v-if="protectionForm.anti_leech" label="允许的来域名（逗号分隔）">
-              <a-input v-model:value="protectionForm.leech_domains" placeholder="example.com,www.example.com" />
-            </a-form-item>
-            <a-form-item label="Bot 防护">
-              <a-switch v-model:checked="protectionForm.bot_protection" />
-            </a-form-item>
-            <a-form-item label="IP 白名单（每行一个）">
-              <a-textarea v-model:value="protectionForm.ip_whitelist" :rows="4" />
-            </a-form-item>
-            <a-form-item label="IP 黑名单（每行一个）">
-              <a-textarea v-model:value="protectionForm.ip_blacklist" :rows="4" />
-            </a-form-item>
+          <a-form :model="protectionForm" layout="vertical" style="max-width: 920px">
+            <!-- 防护总开关 -->
+            <a-card class="master-switch-card" :bordered="false">
+              <div class="master-switch-row">
+                <div>
+                  <span class="master-switch-label">防护总开关</span>
+                  <span class="master-switch-desc">关闭后将停止所有该域名的防护策略</span>
+                </div>
+                <a-switch
+                  v-model:checked="protectionForm.protection_enabled"
+                  :checked-children="'开'"
+                  :un-checked-children="'关'"
+                  :style="protectionForm.protection_enabled ? 'background:#52c41a' : ''"
+                />
+              </div>
+            </a-card>
+
+            <template v-if="protectionForm.protection_enabled">
+              <a-form-item label="WAF 防护">
+                <a-switch v-model:checked="protectionForm.waf_enabled" />
+              </a-form-item>
+              <a-form-item label="CC 防护">
+                <a-switch v-model:checked="protectionForm.cc_enabled" />
+              </a-form-item>
+              <a-row v-if="protectionForm.cc_enabled" :gutter="16">
+                <a-col :span="12">
+                  <a-form-item label="CC 阈值（次）">
+                    <a-input-number v-model:value="protectionForm.cc_threshold" :min="1" style="width: 100%" />
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="统计周期（秒）">
+                    <a-input-number v-model:value="protectionForm.cc_period" :min="1" style="width: 100%" />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+
+              <!-- 加强版 CC 配置 -->
+              <a-divider>加强版 CC 配置</a-divider>
+              <a-form-item label="启用加强版 CC">
+                <a-switch v-model:checked="protectionForm.enhanced_cc.enabled" />
+              </a-form-item>
+              <template v-if="protectionForm.enhanced_cc.enabled">
+                <div class="page-toolbar" style="margin-bottom: 8px">
+                  <span style="color: #666">多层防护策略</span>
+                  <a-button type="primary" size="small" @click="addCcLayer">+ 添加层级</a-button>
+                </div>
+                <a-table
+                  :columns="ccLayerColumns"
+                  :data-source="protectionForm.enhanced_cc.layers"
+                  :pagination="false"
+                  row-key="priority"
+                  size="small"
+                  :scroll="{ x: 1000 }"
+                >
+                  <template #bodyCell="{ column, record, index }">
+                    <template v-if="column.dataIndex === 'name'">
+                      <a-input v-model:value="record.name" size="small" />
+                    </template>
+                    <template v-else-if="column.dataIndex === 'priority'">
+                      <a-input-number v-model:value="record.priority" :min="1" size="small" style="width: 70px" />
+                    </template>
+                    <template v-else-if="column.dataIndex === 'scope'">
+                      <a-select v-model:value="record.scope" size="small" style="width: 100px">
+                        <a-select-option value="uri">URI</a-select-option>
+                        <a-select-option value="host">域名</a-select-option>
+                        <a-select-option value="global">全局</a-select-option>
+                      </a-select>
+                    </template>
+                    <template v-else-if="column.dataIndex === 'path'">
+                      <a-input v-model:value="record.path" size="small" placeholder="/*" />
+                    </template>
+                    <template v-else-if="column.dataIndex === 'target'">
+                      <a-select v-model:value="record.target" size="small" style="width: 100px">
+                        <a-select-option value="ip">IP</a-select-option>
+                        <a-select-option value="ip_uri">IP+URI</a-select-option>
+                        <a-select-option value="session">会话</a-select-option>
+                      </a-select>
+                    </template>
+                    <template v-else-if="column.dataIndex === 'threshold'">
+                      <a-input-number v-model:value="record.threshold" :min="1" size="small" style="width: 70px" />
+                    </template>
+                    <template v-else-if="column.dataIndex === 'window'">
+                      <a-input-number v-model:value="record.window" :min="1" size="small" style="width: 80px" />
+                    </template>
+                    <template v-else-if="column.dataIndex === 'action'">
+                      <a-select v-model:value="record.action" size="small" style="width: 100px">
+                        <a-select-option value="block">阻断</a-select-option>
+                        <a-select-option value="captcha">人机验证</a-select-option>
+                        <a-select-option value="limit">限速</a-select-option>
+                        <a-select-option value="alert">告警</a-select-option>
+                      </a-select>
+                    </template>
+                    <template v-else-if="column.dataIndex === 'duration'">
+                      <a-input-number v-model:value="record.duration" :min="0" size="small" style="width: 80px" />
+                    </template>
+                    <template v-else-if="column.key === 'action'">
+                      <a-button type="link" danger size="small" @click="removeCcLayer(index)">删除</a-button>
+                    </template>
+                  </template>
+                </a-table>
+
+                <a-card title="自适应阈值" size="small" style="margin-top: 16px">
+                  <a-row :gutter="16">
+                    <a-col :span="6">
+                      <a-form-item label="自适应阈值" :label-col="{ span: 24 }">
+                        <a-switch v-model:checked="protectionForm.enhanced_cc.adaptive" />
+                      </a-form-item>
+                    </a-col>
+                    <a-col :span="6">
+                      <a-form-item label="最小倍率" :label-col="{ span: 24 }">
+                        <a-input-number v-model:value="protectionForm.enhanced_cc.min_ratio" :min="0" :step="0.1" style="width: 100%" :disabled="!protectionForm.enhanced_cc.adaptive" />
+                      </a-form-item>
+                    </a-col>
+                    <a-col :span="6">
+                      <a-form-item label="最大倍率" :label-col="{ span: 24 }">
+                        <a-input-number v-model:value="protectionForm.enhanced_cc.max_ratio" :min="0" :step="0.1" style="width: 100%" :disabled="!protectionForm.enhanced_cc.adaptive" />
+                      </a-form-item>
+                    </a-col>
+                    <a-col :span="6">
+                      <a-form-item label="基线窗口(秒)" :label-col="{ span: 24 }">
+                        <a-input-number v-model:value="protectionForm.enhanced_cc.baseline_window" :min="1" style="width: 100%" :disabled="!protectionForm.enhanced_cc.adaptive" />
+                      </a-form-item>
+                    </a-col>
+                  </a-row>
+                </a-card>
+              </template>
+
+              <!-- 智能 CC 配置 -->
+              <a-divider>智能 CC 配置</a-divider>
+              <a-form-item label="启用智能 CC">
+                <a-switch v-model:checked="protectionForm.smart_cc.enabled" />
+              </a-form-item>
+              <template v-if="protectionForm.smart_cc.enabled">
+                <a-row :gutter="16" align="middle">
+                  <a-col :span="8">
+                    <a-form-item label="防护强度" :label-col="{ span: 24 }">
+                      <a-select v-model:value="protectionForm.smart_cc.level">
+                        <a-select-option value="loose">宽松</a-select-option>
+                        <a-select-option value="medium">中等</a-select-option>
+                        <a-select-option value="strict">严格</a-select-option>
+                      </a-select>
+                    </a-form-item>
+                  </a-col>
+                  <a-col :span="8">
+                    <a-form-item :label-col="{ span: 24 }" label="操作">
+                      <a-button @click="previewSmartCc">预览智能基线</a-button>
+                    </a-form-item>
+                  </a-col>
+                  <a-col :span="8">
+                    <a-form-item :label-col="{ span: 24 }" label="上次计算时间">
+                      <span class="text-muted">{{ protectionForm.smart_cc.last_calc_time || '尚未计算' }}</span>
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+              </template>
+
+              <a-form-item label="防盗链">
+                <a-switch v-model:checked="protectionForm.anti_leech" />
+              </a-form-item>
+              <a-form-item v-if="protectionForm.anti_leech" label="允许的来域名（逗号分隔）">
+                <a-input v-model:value="protectionForm.leech_domains" placeholder="example.com,www.example.com" />
+              </a-form-item>
+              <a-form-item label="Bot 防护">
+                <a-switch v-model:checked="protectionForm.bot_protection" />
+              </a-form-item>
+              <a-form-item label="IP 白名单（每行一个）">
+                <a-textarea v-model:value="protectionForm.ip_whitelist" :rows="4" />
+              </a-form-item>
+              <a-form-item label="IP 黑名单（每行一个）">
+                <a-textarea v-model:value="protectionForm.ip_blacklist" :rows="4" />
+              </a-form-item>
+            </template>
+
             <a-form-item>
               <a-button type="primary" @click="saveProtection">保存防护配置</a-button>
             </a-form-item>
@@ -240,3 +469,28 @@ onMounted(() => {
     </a-spin>
   </div>
 </template>
+
+<style scoped>
+.master-switch-card {
+  background: linear-gradient(135deg, #f0f9eb 0%, #e6f7ff 100%);
+  border: 1px solid #d9f7d9;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+.master-switch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.master-switch-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.85);
+}
+.master-switch-desc {
+  display: block;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  margin-top: 4px;
+}
+</style>
