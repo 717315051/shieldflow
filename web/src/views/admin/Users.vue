@@ -1,8 +1,11 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { message, Modal } from 'ant-design-vue'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined } from '@ant-design/icons-vue'
 import { adminUserApi } from '../../api'
+import SfPageHeader from '../../components/SfPageHeader.vue'
+import SfTableCard from '../../components/SfTableCard.vue'
+import SfStatusBadge from '../../components/SfStatusBadge.vue'
 
 const loading = ref(false)
 const dataSource = ref([])
@@ -119,73 +122,74 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="page-container">
-    <div class="page-toolbar">
-      <h2 style="margin: 0">用户管理</h2>
-      <a-space>
-        <a-button @click="loadData"><ReloadOutlined /> 刷新</a-button>
-        <a-button type="primary" @click="openAdd"><PlusOutlined /> 添加用户</a-button>
-      </a-space>
-    </div>
-
-    <a-card :bordered="false" style="margin-bottom: 16px">
-      <a-form layout="inline" @submit.prevent="handleSearch">
-        <a-form-item label="关键词">
-          <a-input v-model:value="query.keyword" allow-clear @pressEnter="handleSearch" />
-        </a-form-item>
-        <a-form-item label="状态">
-          <a-select v-model:value="query.status" allow-clear placeholder="全部" style="width: 120px">
-            <a-select-option value="active">正常</a-select-option>
-            <a-select-option value="disabled">禁用</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item>
-          <a-space>
-            <a-button type="primary" html-type="submit">查询</a-button>
-          </a-space>
-        </a-form-item>
-      </a-form>
-    </a-card>
-
-    <a-table
-      :columns="columns"
-      :data-source="dataSource"
-      :loading="loading"
-      row-key="id"
-      :scroll="{ x: 1200 }"
-      :pagination="{
-        current: query.page,
-        pageSize: query.page_size,
-        total,
-        showSizeChanger: true,
-        showTotal: (t) => `共 ${t} 条`,
-      }"
-      @change="handleTableChange"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.dataIndex === 'role'">
-          <a-tag :color="record.role === 'admin' ? 'red' : 'blue'">
-            {{ record.role === 'admin' ? '管理员' : '普通用户' }}
-          </a-tag>
-        </template>
-        <template v-else-if="column.dataIndex === 'status'">
-          <a-tag :color="record.status === 'active' ? 'green' : 'default'">
-            {{ record.status === 'active' ? '正常' : '禁用' }}
-          </a-tag>
-        </template>
-        <template v-else-if="column.key === 'action'">
-          <a-space>
-            <a-button type="link" size="small" @click="openEdit(record)">编辑</a-button>
-            <a-button type="link" size="small" @click="toggleStatus(record)">
-              {{ record.status === 'active' ? '禁用' : '启用' }}
-            </a-button>
-            <a-button type="link" danger size="small" @click="handleDelete(record.id)">删除</a-button>
-          </a-space>
-        </template>
+  <div class="admin-page">
+    <SfPageHeader title="用户管理" sub="查看和管理所有注册用户" :show-refresh="true" @refresh="loadData">
+      <template #extra>
+        <a-button type="primary" @click="openAdd">
+          <template #icon><PlusOutlined /></template>
+          添加用户
+        </a-button>
       </template>
-    </a-table>
+    </SfPageHeader>
 
-    <a-modal v-model:open="modalVisible" :title="editingId ? '编辑用户' : '添加用户'" @ok="submit">
+    <SfTableCard title="用户列表" :show-search="false" @refresh="loadData">
+      <template #filters>
+        <a-input
+          v-model:value="query.keyword"
+          placeholder="搜索用户名/邮箱/手机"
+          allow-clear
+          style="width: 220px"
+          @press-enter="handleSearch"
+        />
+        <a-select
+          v-model:value="query.status"
+          allow-clear
+          placeholder="状态"
+          style="width: 120px"
+          @change="handleSearch"
+        >
+          <a-select-option value="active">正常</a-select-option>
+          <a-select-option value="disabled">禁用</a-select-option>
+        </a-select>
+        <a-button type="primary" @click="handleSearch">查询</a-button>
+        <a-button @click="() => { query.keyword = ''; query.status = undefined; handleSearch() }">重置</a-button>
+      </template>
+      <a-table
+        :columns="columns"
+        :data-source="dataSource"
+        :loading="loading"
+        :scroll="{ x: 1200 }"
+        :pagination="{
+          current: query.page,
+          pageSize: query.page_size,
+          total,
+          showSizeChanger: true,
+          showTotal: (t) => `共 ${t} 条`,
+        }"
+        row-key="id"
+        @change="handleTableChange"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.dataIndex === 'role'">
+            <SfStatusBadge :status="record.role === 'admin' ? 'info' : 'neutral'" :text="record.role === 'admin' ? '管理员' : '普通用户'" />
+          </template>
+          <template v-else-if="column.dataIndex === 'status'">
+            <SfStatusBadge :status="record.status === 'active' ? 'success' : 'neutral'" :text="record.status === 'active' ? '正常' : '禁用'" />
+          </template>
+          <template v-else-if="column.key === 'action'">
+            <a-space>
+              <a-button type="link" size="small" @click="openEdit(record)">编辑</a-button>
+              <a-button type="link" size="small" @click="toggleStatus(record)">
+                {{ record.status === 'active' ? '禁用' : '启用' }}
+              </a-button>
+              <a-button type="link" danger size="small" @click="handleDelete(record.id)">删除</a-button>
+            </a-space>
+          </template>
+        </template>
+      </a-table>
+    </SfTableCard>
+
+    <a-modal v-model:open="modalVisible" :title="editingId ? '编辑用户' : '添加用户'" @ok="submit" width="500">
       <a-form ref="formRef" :model="form" :rules="rules" layout="vertical">
         <a-form-item label="用户名" name="username">
           <a-input v-model:value="form.username" :disabled="!!editingId" />

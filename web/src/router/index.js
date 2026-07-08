@@ -102,9 +102,8 @@ const routes = [
   },
   {
     path: '/admin',
-    component: () => import('../layouts/AdminLayout.vue'),
+    component: () => import('../layouts/UserLayout.vue'),
     redirect: '/admin/users',
-    meta: { admin: true },
     children: [
       {
         path: 'users',
@@ -122,7 +121,7 @@ const routes = [
         path: 'packages',
         name: 'AdminPackages',
         component: () => import('../views/admin/Packages.vue'),
-        meta: { title: '套餐管理', admin: true },
+        meta: { title: '套餐模板', admin: true },
       },
       {
         path: 'ddos',

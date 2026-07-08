@@ -52,27 +52,33 @@ const themeClass = computed(() => `sidebar--${props.theme}`)
 
     <!-- Menu -->
     <nav class="sf-sidebar__nav">
-      <div
-        v-for="m in menus"
-        :key="m.key"
-        :class="['sf-sidebar__group', { active: isActive(m), open: openKeys.has(m.key) || hasActiveChild(m) }]"
-      >
-        <div class="sf-sidebar__group-title" @click="go(m)">
-          <SfIcon v-if="m.icon" :name="m.icon" :size="16" :tone="isActive(m) ? 'brand' : 'secondary'" class="sf-sidebar__icon" />
-          <span v-if="!collapsed" class="sf-sidebar__label">{{ m.label }}</span>
-          <SfIcon v-if="!collapsed && m.children" :name="(openKeys.has(m.key) || hasActiveChild(m)) ? 'DownOutlined' : 'RightOutlined'" :size="10" tone="tertiary" class="sf-sidebar__arrow" />
+      <template v-for="(m, idx) in menus" :key="m.key">
+        <!-- 分隔符 (管理后台分组标题) -->
+        <div v-if="m.divider" class="sf-sidebar__divider">
+          <span v-if="!collapsed">{{ m.label }}</span>
+          <span v-else class="sf-sidebar__divider-dot"></span>
         </div>
-        <div v-if="!collapsed && m.children && (openKeys.has(m.key) || hasActiveChild(m))" class="sf-sidebar__children">
-          <div
-            v-for="c in m.children"
-            :key="c.path"
-            :class="['sf-sidebar__child', { active: route.path === c.path }]"
-            @click="onChildClick(m, c)"
-          >
-            {{ c.label }}
+        <div
+          v-else
+          :class="['sf-sidebar__group', { active: isActive(m), open: openKeys.has(m.key) || hasActiveChild(m) }]"
+        >
+          <div class="sf-sidebar__group-title" @click="go(m)">
+            <SfIcon v-if="m.icon" :name="m.icon" :size="16" :tone="isActive(m) ? 'brand' : 'secondary'" class="sf-sidebar__icon" />
+            <span v-if="!collapsed" class="sf-sidebar__label">{{ m.label }}</span>
+            <SfIcon v-if="!collapsed && m.children" :name="(openKeys.has(m.key) || hasActiveChild(m)) ? 'DownOutlined' : 'RightOutlined'" :size="10" tone="tertiary" class="sf-sidebar__arrow" />
+          </div>
+          <div v-if="!collapsed && m.children && (openKeys.has(m.key) || hasActiveChild(m))" class="sf-sidebar__children">
+            <div
+              v-for="c in m.children"
+              :key="c.path"
+              :class="['sf-sidebar__child', { active: route.path === c.path }]"
+              @click="onChildClick(m, c)"
+            >
+              {{ c.label }}
+            </div>
           </div>
         </div>
-      </div>
+      </template>
     </nav>
 
     <!-- Version -->
@@ -122,6 +128,27 @@ const themeClass = computed(() => `sidebar--${props.theme}`)
 
 .sf-sidebar__nav {
   flex: 1; overflow-y: auto; padding: var(--sp-2) 0;
+}
+
+/* 分组分隔符 (用于管理后台分组) */
+.sf-sidebar__divider {
+  padding: var(--sp-4) var(--sp-4) var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  display: flex; align-items: center; gap: var(--sp-2);
+}
+.sf-sidebar__divider::before {
+  content: '';
+  width: 16px; height: 1px;
+  background: var(--border-color);
+}
+.sf-sidebar__divider-dot {
+  width: 4px; height: 4px;
+  background: var(--text-tertiary);
+  border-radius: 50%;
+  margin: 0 auto;
 }
 .sf-sidebar__nav::-webkit-scrollbar { width: 4px; }
 .sf-sidebar__nav::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 2px; }
