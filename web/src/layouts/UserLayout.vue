@@ -163,7 +163,7 @@ onMounted(() => {
 .sf-admin-banner {
   position: fixed; top: 0; left: 0; right: 0;
   height: 28px;
-  background: var(--warning);
+  background: var(--danger);
   color: #fff;
   display: flex; align-items: center; justify-content: center;
   gap: var(--sp-2);

@@ -1,7 +1,10 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { message, Modal } from 'ant-design-vue'
-import { PlusOutlined, UploadOutlined, ReloadOutlined } from '@ant-design/icons-vue'
+import SfPageHeader from '../components/SfPageHeader.vue'
+import SfTableCard from '../components/SfTableCard.vue'
+import SfStatusBadge from '../components/SfStatusBadge.vue'
+import SfIcon from '../components/SfIcon.vue'
 import { certApi } from '../api'
 
 const activeTab = ref('certs')
@@ -14,10 +17,10 @@ const certQuery = reactive({ keyword: '', page: 1, page_size: 10 })
 
 const certColumns = [
   { title: '域名', dataIndex: 'domain' },
-  { title: '颁发者', dataIndex: 'issuer' },
-  { title: '有效期', dataIndex: 'not_after' },
-  { title: '状态', dataIndex: 'status' },
-  { title: '操作', key: 'action', width: 100 },
+  { title: '颁发者', dataIndex: 'issuer', width: 200 },
+  { title: '有效期', dataIndex: 'not_after', width: 200 },
+  { title: '状态', dataIndex: 'status', width: 110, key: 'status' },
+  { title: '操作', key: 'action', width: 120 },
 ]
 
 async function loadCerts() {
@@ -33,12 +36,7 @@ async function loadCerts() {
 
 // 上传证书
 const uploadVisible = ref(false)
-const uploadForm = reactive({
-  name: '',
-  domain: '',
-  cert: '',
-  key: '',
-})
+const uploadForm = reactive({ name: '', domain: '', cert: '', key: '' })
 
 async function submitUpload() {
   if (!uploadForm.cert || !uploadForm.key) {
@@ -122,95 +120,114 @@ onMounted(() => {
 
 <template>
   <div class="page-container">
-    <div class="page-toolbar">
-      <h2 style="margin: 0">SSL 证书</h2>
-      <a-button @click="loadCerts"><ReloadOutlined /> 刷新</a-button>
-    </div>
+    <SfPageHeader title="SSL 证书" sub="证书管理、ACME 账户与 DNS 账户" :show-refresh="true" @refresh="loadCerts" />
 
     <a-tabs v-model:activeKey="activeTab" @change="onTabChange">
       <a-tab-pane key="certs" tab="证书列表">
-        <div class="page-toolbar">
-          <a-input-search
-            v-model:value="certQuery.keyword"
-            placeholder="搜索域名"
-            style="width: 300px"
-            @search="loadCerts"
-          />
-          <a-space>
-            <a-button @click="uploadVisible = true"><UploadOutlined /> 上传证书</a-button>
-            <a-button type="primary" @click="uploadVisible = true"><PlusOutlined /> 申请证书</a-button>
-          </a-space>
-        </div>
-        <a-table
-          :columns="certColumns"
-          :data-source="certs"
-          :loading="loading"
-          row-key="id"
-          :pagination="{
-            current: certQuery.page,
-            pageSize: certQuery.page_size,
-            total: certTotal,
-          }"
-          @change="(p) => { certQuery.page = p.current; loadCerts() }"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.dataIndex === 'status'">
-              <a-tag :color="record.status === 'valid' ? 'green' : 'red'">{{ record.status }}</a-tag>
-            </template>
-            <template v-else-if="column.key === 'action'">
-              <a-button type="link" danger size="small" @click="deleteCert(record.id)">删除</a-button>
-            </template>
+        <SfTableCard title="证书列表" sub="所有 SSL/TLS 证书" :show-search="false" :show-refresh="false">
+          <template #filters>
+            <a-input
+              v-model:value="certQuery.keyword"
+              placeholder="搜索域名"
+              style="width: 220px"
+              allow-clear
+              @press-enter="loadCerts"
+            />
+            <a-button type="primary" @click="uploadVisible = true">
+              <template #icon><SfIcon name="PlusOutlined" :size="14" /></template>
+              申请/上传证书
+            </a-button>
           </template>
-        </a-table>
+
+          <a-table
+            :columns="certColumns"
+            :data-source="certs"
+            :loading="loading"
+            row-key="id"
+            :pagination="{
+              current: certQuery.page,
+              pageSize: certQuery.page_size,
+              total: certTotal,
+              showSizeChanger: true,
+              showTotal: (t) => `共 ${t} 条`,
+            }"
+            @change="(p) => { certQuery.page = p.current; loadCerts() }"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'status'">
+                <SfStatusBadge
+                  :status="record.status === 'valid' ? 'success' : (record.status === 'expiring' ? 'warning' : 'danger')"
+                  :text="record.status === 'valid' ? '有效' : (record.status === 'expiring' ? '即将过期' : '已过期')"
+                />
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <a-button type="link" danger size="small" @click="deleteCert(record.id)">删除</a-button>
+              </template>
+            </template>
+          </a-table>
+        </SfTableCard>
       </a-tab-pane>
 
       <a-tab-pane key="acme" tab="ACME 账户">
-        <div class="page-toolbar">
-          <span></span>
-          <a-button type="primary" @click="acmeVisible = true"><PlusOutlined /> 添加 ACME 账户</a-button>
-        </div>
-        <a-table
-          :columns="[
-            { title: '邮箱', dataIndex: 'email' },
-            { title: '目录', dataIndex: 'directory' },
-            { title: '密钥类型', dataIndex: 'key_type' },
-            { title: '操作', key: 'action', width: 100 },
-          ]"
-          :data-source="acmeList"
-          row-key="id"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'action'">
-              <a-button type="link" danger size="small" @click="deleteAcme(record.id)">删除</a-button>
-            </template>
+        <SfPageHeader title="ACME 账户" sub="用于自动签发证书的 ACME 账户" :show-refresh="true" @refresh="loadAcme">
+          <template #extra>
+            <a-button type="primary" @click="acmeVisible = true">
+              <template #icon><SfIcon name="PlusOutlined" :size="14" /></template>
+              添加 ACME 账户
+            </a-button>
           </template>
-        </a-table>
+        </SfPageHeader>
+        <SfTableCard title="ACME 账户列表" :show-search="false" :show-refresh="false">
+          <a-table
+            :columns="[
+              { title: '邮箱', dataIndex: 'email' },
+              { title: '目录', dataIndex: 'directory', ellipsis: true },
+              { title: '密钥类型', dataIndex: 'key_type', width: 120 },
+              { title: '操作', key: 'action', width: 120 },
+            ]"
+            :data-source="acmeList"
+            row-key="id"
+            :pagination="false"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'action'">
+                <a-button type="link" danger size="small" @click="deleteAcme(record.id)">删除</a-button>
+              </template>
+            </template>
+          </a-table>
+        </SfTableCard>
       </a-tab-pane>
 
       <a-tab-pane key="dns" tab="DNS 账户">
-        <div class="page-toolbar">
-          <span></span>
-          <a-button type="primary" @click="dnsVisible = true"><PlusOutlined /> 添加 DNS 账户</a-button>
-        </div>
-        <a-table
-          :columns="[
-            { title: '名称', dataIndex: 'name' },
-            { title: '服务商', dataIndex: 'provider' },
-            { title: '操作', key: 'action', width: 100 },
-          ]"
-          :data-source="dnsList"
-          row-key="id"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'action'">
-              <a-button type="link" danger size="small" @click="deleteDns(record.id)">删除</a-button>
-            </template>
+        <SfPageHeader title="DNS 账户" sub="用于 DNS 验证的 DNS 服务商账户" :show-refresh="true" @refresh="loadDns">
+          <template #extra>
+            <a-button type="primary" @click="dnsVisible = true">
+              <template #icon><SfIcon name="PlusOutlined" :size="14" /></template>
+              添加 DNS 账户
+            </a-button>
           </template>
-        </a-table>
+        </SfPageHeader>
+        <SfTableCard title="DNS 账户列表" :show-search="false" :show-refresh="false">
+          <a-table
+            :columns="[
+              { title: '名称', dataIndex: 'name' },
+              { title: '服务商', dataIndex: 'provider', width: 140 },
+              { title: '操作', key: 'action', width: 120 },
+            ]"
+            :data-source="dnsList"
+            row-key="id"
+            :pagination="false"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'action'">
+                <a-button type="link" danger size="small" @click="deleteDns(record.id)">删除</a-button>
+              </template>
+            </template>
+          </a-table>
+        </SfTableCard>
       </a-tab-pane>
     </a-tabs>
 
-    <!-- 上传/申请 弹窗 -->
     <a-modal v-model:open="uploadVisible" title="上传/申请证书" width="640px" @ok="submitUpload">
       <a-form :model="uploadForm" layout="vertical">
         <a-form-item label="名称" required>
@@ -219,10 +236,10 @@ onMounted(() => {
         <a-form-item label="域名" required>
           <a-input v-model:value="uploadForm.domain" placeholder="*.example.com" />
         </a-form-item>
-        <a-form-item label="证书内容（PEM）" required>
+        <a-form-item label="证书内容(PEM)" required>
           <a-textarea v-model:value="uploadForm.cert" :rows="6" placeholder="-----BEGIN CERTIFICATE-----" />
         </a-form-item>
-        <a-form-item label="私钥内容（PEM）" required>
+        <a-form-item label="私钥内容(PEM)" required>
           <a-textarea v-model:value="uploadForm.key" :rows="6" placeholder="-----BEGIN PRIVATE KEY-----" />
         </a-form-item>
       </a-form>

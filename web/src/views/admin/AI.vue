@@ -6,8 +6,11 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { PieChart, LineChart, BarChart } from 'echarts/charts'
 import { TitleComponent, TooltipComponent, GridComponent, LegendComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
+import SfPageHeader from '../../components/SfPageHeader.vue'
+import SfTableCard from '../../components/SfTableCard.vue'
+import SfStatusBadge from '../../components/SfStatusBadge.vue'
+import SfIcon from '../../components/SfIcon.vue'
 import { aiApi } from '../../api'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 
 use([CanvasRenderer, PieChart, LineChart, BarChart, TitleComponent, TooltipComponent, GridComponent, LegendComponent])
 
@@ -16,10 +19,7 @@ const loading = ref(false)
 
 // ============ 仪表盘 ============
 const overview = reactive({
-  today_calls: 0,
-  today_tokens: 0,
-  total_calls: 0,
-  total_cost: 0,
+  today_calls: 0, today_tokens: 0, total_calls: 0, total_cost: 0,
 })
 const funcPieChart = ref(null)
 const funcPieData = ref([])
@@ -27,19 +27,15 @@ const funcPieData = ref([])
 const funcPieOption = computed(() => ({
   tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
   legend: { bottom: 0 },
-  series: [
-    {
-      name: '功能调用',
-      type: 'pie',
-      radius: ['40%', '70%'],
-      avoidLabelOverlap: false,
-      itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
-      label: { show: false, position: 'center' },
-      emphasis: { label: { show: true, fontSize: 18, fontWeight: 'bold' } },
-      labelLine: { show: false },
-      data: funcPieData.value,
-    },
-  ],
+  series: [{
+    name: '功能调用', type: 'pie', radius: ['40%', '70%'],
+    avoidLabelOverlap: false,
+    itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+    label: { show: false, position: 'center' },
+    emphasis: { label: { show: true, fontSize: 18, fontWeight: 'bold' } },
+    labelLine: { show: false },
+    data: funcPieData.value,
+  }],
 }))
 
 async function loadDashboard() {
@@ -48,16 +44,12 @@ async function loadDashboard() {
     const res = await aiApi.dashboard()
     const d = res.data || {}
     Object.assign(overview, {
-      today_calls: d.today_calls ?? 0,
-      today_tokens: d.today_tokens ?? 0,
-      total_calls: d.total_calls ?? 0,
-      total_cost: d.total_cost ?? 0,
+      today_calls: d.today_calls ?? 0, today_tokens: d.today_tokens ?? 0,
+      total_calls: d.total_calls ?? 0, total_cost: d.total_cost ?? 0,
     })
     funcPieData.value = (d.func_distribution || []).map((f) => ({ name: f.name, value: f.value }))
     nextTick(() => funcPieChart.value?.setOption(funcPieOption.value, true))
-  } finally {
-    loading.value = false
-  }
+  } finally { loading.value = false }
 }
 
 // ============ Token 统计 ============
@@ -72,13 +64,7 @@ const tokenOption = computed(() => ({
   grid: { left: 60, right: 30, bottom: 60, top: 30 },
   xAxis: { type: 'category', data: tokenX.value, boundaryGap: false },
   yAxis: { type: 'value', name: 'Token' },
-  series: tokenSeries.value.map((s) => ({
-    name: s.name,
-    type: 'line',
-    smooth: true,
-    areaStyle: {},
-    data: s.data,
-  })),
+  series: tokenSeries.value.map((s) => ({ name: s.name, type: 'line', smooth: true, areaStyle: {}, data: s.data })),
 }))
 
 async function loadTokenStats() {
@@ -89,9 +75,7 @@ async function loadTokenStats() {
     tokenX.value = d.dates || []
     tokenSeries.value = (d.series || []).map((s) => ({ name: s.name, data: s.data }))
     nextTick(() => tokenChart.value?.setOption(tokenOption.value, true))
-  } finally {
-    loading.value = false
-  }
+  } finally { loading.value = false }
 }
 
 // ============ 成本分析 ============
@@ -105,14 +89,10 @@ const costOption = computed(() => ({
   grid: { left: 60, right: 30, bottom: 40, top: 30 },
   xAxis: { type: 'category', data: costX.value },
   yAxis: { type: 'value', name: '成本(¥)' },
-  series: [
-    {
-      name: '成本',
-      type: 'bar',
-      data: costData.value,
-      itemStyle: { color: '#1890ff', borderRadius: [4, 4, 0, 0] },
-    },
-  ],
+  series: [{
+    name: '成本', type: 'bar', data: costData.value,
+    itemStyle: { color: '#1890ff', borderRadius: [4, 4, 0, 0] },
+  }],
 }))
 
 async function loadCostAnalysis() {
@@ -123,9 +103,7 @@ async function loadCostAnalysis() {
     costX.value = (d.models || []).map((m) => m.name)
     costData.value = (d.models || []).map((m) => m.cost)
     nextTick(() => costChart.value?.setOption(costOption.value, true))
-  } finally {
-    loading.value = false
-  }
+  } finally { loading.value = false }
 }
 
 // ============ 模型管理 ============
@@ -135,10 +113,10 @@ const modelQuery = reactive({ page: 1, page_size: 10 })
 
 const modelColumns = [
   { title: '模型名称', dataIndex: 'name' },
-  { title: 'Provider', dataIndex: 'provider' },
+  { title: 'Provider', dataIndex: 'provider', width: 120 },
   { title: '模型标识', dataIndex: 'model_id', ellipsis: true },
-  { title: '单价(¥/千Token)', dataIndex: 'price' },
-  { title: '状态', dataIndex: 'status' },
+  { title: '单价(¥/千Token)', dataIndex: 'price', width: 140 },
+  { title: '状态', dataIndex: 'status', width: 100, key: 'status' },
   { title: '操作', key: 'action', width: 160 },
 ]
 
@@ -148,22 +126,15 @@ async function loadModels() {
     const res = await aiApi.models(modelQuery)
     models.value = res.data?.list || res.data || []
     modelTotal.value = res.data?.total ?? models.value.length
-  } finally {
-    loading.value = false
-  }
+  } finally { loading.value = false }
 }
 
 const modelVisible = ref(false)
 const editingModelId = ref(null)
 const modelFormRef = ref()
 const modelForm = reactive({
-  name: '',
-  provider: 'openai',
-  model_id: '',
-  api_key: '',
-  api_base: '',
-  price: 0,
-  status: 'active',
+  name: '', provider: 'openai', model_id: '',
+  api_key: '', api_base: '', price: 0, status: 'active',
 })
 
 const modelRules = {
@@ -174,13 +145,8 @@ const modelRules = {
 function openAddModel() {
   editingModelId.value = null
   Object.assign(modelForm, {
-    name: '',
-    provider: 'openai',
-    model_id: '',
-    api_key: '',
-    api_base: '',
-    price: 0,
-    status: 'active',
+    name: '', provider: 'openai', model_id: '',
+    api_key: '', api_base: '', price: 0, status: 'active',
   })
   modelVisible.value = true
 }
@@ -214,6 +180,13 @@ async function deleteModel(id) {
   })
 }
 
+function reloadCurrent() {
+  if (activeTab.value === 'dashboard') loadDashboard()
+  else if (activeTab.value === 'token') loadTokenStats()
+  else if (activeTab.value === 'cost') loadCostAnalysis()
+  else if (activeTab.value === 'models') loadModels()
+}
+
 function onTabChange(key) {
   if (key === 'token' && tokenX.value.length === 0) loadTokenStats()
   if (key === 'cost' && costX.value.length === 0) loadCostAnalysis()
@@ -227,15 +200,9 @@ onMounted(() => {
 
 <template>
   <div class="page-container">
-    <div class="page-toolbar">
-      <h2 style="margin: 0">AI 防护管理</h2>
-      <a-button @click="activeTab === 'dashboard' ? loadDashboard() : activeTab === 'token' ? loadTokenStats() : activeTab === 'cost' ? loadCostAnalysis() : loadModels()">
-        <ReloadOutlined /> 刷新
-      </a-button>
-    </div>
+    <SfPageHeader title="AI 防护管理" sub="调用统计、Token、成本与模型管理" :show-refresh="true" @refresh="reloadCurrent" />
 
     <a-tabs v-model:activeKey="activeTab" @change="onTabChange">
-      <!-- 仪表盘 -->
       <a-tab-pane key="dashboard" tab="仪表盘">
         <div class="stat-card-grid">
           <a-card><a-statistic title="今日调用" :value="overview.today_calls" :value-style="{ color: '#1890ff' }" /></a-card>
@@ -243,75 +210,88 @@ onMounted(() => {
           <a-card><a-statistic title="累计调用" :value="overview.total_calls" /></a-card>
           <a-card><a-statistic title="累计成本" :value="overview.total_cost" prefix="¥" :precision="2" :value-style="{ color: '#fa8c16' }" /></a-card>
         </div>
-        <a-card title="功能调用占比">
-          <v-chart ref="funcPieChart" class="chart-box" :option="funcPieOption" autoresize />
-        </a-card>
+        <SfTableCard title="功能调用占比" :show-search="false" :show-refresh="false">
+          <div style="padding: 16px">
+            <v-chart ref="funcPieChart" class="chart-box" :option="funcPieOption" autoresize />
+          </div>
+        </SfTableCard>
       </a-tab-pane>
 
-      <!-- Token 统计 -->
       <a-tab-pane key="token" tab="Token统计">
-        <div class="page-toolbar">
-          <span></span>
-          <a-radio-group v-model:value="tokenRange" @change="loadTokenStats">
-            <a-radio-button value="1d">今日</a-radio-button>
-            <a-radio-button value="7d">近7天</a-radio-button>
-            <a-radio-button value="30d">近30天</a-radio-button>
-          </a-radio-group>
-        </div>
-        <a-card title="按模型 Token 使用趋势">
-          <v-chart ref="tokenChart" class="chart-box" :option="tokenOption" autoresize />
-        </a-card>
-      </a-tab-pane>
-
-      <!-- 成本分析 -->
-      <a-tab-pane key="cost" tab="成本分析">
-        <div class="page-toolbar">
-          <span></span>
-          <a-radio-group v-model:value="costRange" @change="loadCostAnalysis">
-            <a-radio-button value="7d">近7天</a-radio-button>
-            <a-radio-button value="30d">近30天</a-radio-button>
-            <a-radio-button value="90d">近90天</a-radio-button>
-          </a-radio-group>
-        </div>
-        <a-card title="按模型成本">
-          <v-chart ref="costChart" class="chart-box" :option="costOption" autoresize />
-        </a-card>
-      </a-tab-pane>
-
-      <!-- 模型管理 -->
-      <a-tab-pane key="models" tab="模型管理">
-        <div class="page-toolbar">
-          <span></span>
-          <a-button type="primary" @click="openAddModel"><PlusOutlined /> 添加模型</a-button>
-        </div>
-        <a-table
-          :columns="modelColumns"
-          :data-source="models"
-          :loading="loading"
-          row-key="id"
-          :pagination="{ current: modelQuery.page, pageSize: modelQuery.page_size, total: modelTotal, showSizeChanger: true }"
-          @change="(p) => { modelQuery.page = p.current; modelQuery.page_size = p.pageSize; loadModels() }"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.dataIndex === 'status'">
-              <a-tag :color="record.status === 'active' ? 'green' : 'default'">
-                {{ record.status === 'active' ? '启用' : '禁用' }}
-              </a-tag>
-            </template>
-            <template v-else-if="column.key === 'action'">
-              <a-space>
-                <a-button type="link" size="small" @click="openEditModel(record)">编辑</a-button>
-                <a-button type="link" danger size="small" @click="deleteModel(record.id)">删除</a-button>
-              </a-space>
-            </template>
+        <SfPageHeader title="Token 统计" sub="按模型时间序列的 Token 使用趋势" :show-refresh="true" @refresh="loadTokenStats">
+          <template #extra>
+            <a-radio-group v-model:value="tokenRange" @change="loadTokenStats">
+              <a-radio-button value="1d">今日</a-radio-button>
+              <a-radio-button value="7d">近7天</a-radio-button>
+              <a-radio-button value="30d">近30天</a-radio-button>
+            </a-radio-group>
           </template>
-        </a-table>
+        </SfPageHeader>
+        <SfTableCard title="按模型 Token 使用趋势" :show-search="false" :show-refresh="false">
+          <div style="padding: 16px">
+            <v-chart ref="tokenChart" class="chart-box" :option="tokenOption" autoresize />
+          </div>
+        </SfTableCard>
+      </a-tab-pane>
+
+      <a-tab-pane key="cost" tab="成本分析">
+        <SfPageHeader title="成本分析" sub="按模型聚合的成本" :show-refresh="true" @refresh="loadCostAnalysis">
+          <template #extra>
+            <a-radio-group v-model:value="costRange" @change="loadCostAnalysis">
+              <a-radio-button value="7d">近7天</a-radio-button>
+              <a-radio-button value="30d">近30天</a-radio-button>
+              <a-radio-button value="90d">近90天</a-radio-button>
+            </a-radio-group>
+          </template>
+        </SfPageHeader>
+        <SfTableCard title="按模型成本" :show-search="false" :show-refresh="false">
+          <div style="padding: 16px">
+            <v-chart ref="costChart" class="chart-box" :option="costOption" autoresize />
+          </div>
+        </SfTableCard>
+      </a-tab-pane>
+
+      <a-tab-pane key="models" tab="模型管理">
+        <SfPageHeader title="模型管理" sub="可用 AI 模型、API Key、单价" :show-refresh="true" @refresh="loadModels">
+          <template #extra>
+            <a-button type="primary" @click="openAddModel">
+              <template #icon><SfIcon name="PlusOutlined" :size="14" /></template>
+              添加模型
+            </a-button>
+          </template>
+        </SfPageHeader>
+
+        <SfTableCard title="模型列表" :show-search="false" :show-refresh="false">
+          <a-table
+            :columns="modelColumns"
+            :data-source="models"
+            :loading="loading"
+            row-key="id"
+            :pagination="{ current: modelQuery.page, pageSize: modelQuery.page_size, total: modelTotal, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }"
+            @change="(p) => { modelQuery.page = p.current; modelQuery.page_size = p.pageSize; loadModels() }"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'status'">
+                <SfStatusBadge
+                  :status="record.status === 'active' ? 'success' : 'neutral'"
+                  :text="record.status === 'active' ? '启用' : '禁用'"
+                />
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <a-space>
+                  <a-button type="link" size="small" @click="openEditModel(record)">编辑</a-button>
+                  <a-button type="link" danger size="small" @click="deleteModel(record.id)">删除</a-button>
+                </a-space>
+              </template>
+            </template>
+          </a-table>
+        </SfTableCard>
       </a-tab-pane>
     </a-tabs>
 
     <a-modal v-model:open="modelVisible" :title="editingModelId ? '编辑模型' : '添加模型'" @ok="submitModel" width="600px">
       <a-form ref="modelFormRef" :model="modelForm" :rules="modelRules" layout="vertical">
-        <a-form-item label="模型名称" name="name"><a-input v-model:value="modelForm.name" placeholder="如：GPT-4o" /></a-form-item>
+        <a-form-item label="模型名称" name="name"><a-input v-model:value="modelForm.name" placeholder="如:GPT-4o" /></a-form-item>
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="Provider">
@@ -335,7 +315,7 @@ onMounted(() => {
           </a-col>
         </a-row>
         <a-form-item label="模型标识" name="model_id">
-          <a-input v-model:value="modelForm.model_id" placeholder="如：gpt-4o" />
+          <a-input v-model:value="modelForm.model_id" placeholder="如:gpt-4o" />
         </a-form-item>
         <a-form-item label="API Key">
           <a-input-password v-model:value="modelForm.api_key" placeholder="sk-..." />
@@ -343,7 +323,7 @@ onMounted(() => {
         <a-form-item label="API Base URL">
           <a-input v-model:value="modelForm.api_base" placeholder="https://api.openai.com/v1" />
         </a-form-item>
-        <a-form-item label="单价（¥/千Token）">
+        <a-form-item label="单价(¥/千Token)">
           <a-input-number v-model:value="modelForm.price" :min="0" :step="0.001" :precision="3" style="width: 100%" />
         </a-form-item>
       </a-form>
