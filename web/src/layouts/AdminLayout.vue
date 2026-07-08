@@ -1,133 +1,156 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
-import {
-  UserOutlined,
-  ClusterOutlined,
-  CrownOutlined,
-  ThunderboltOutlined,
-  SafetyOutlined,
-  RobotOutlined,
-  SettingOutlined,
-  DatabaseOutlined,
-  LogoutOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-} from '@ant-design/icons-vue'
+import SfSidebar from '../components/SfSidebar.vue'
+import SfTopbar from '../components/SfTopbar.vue'
+import SfIcon from '../components/SfIcon.vue'
 
 const router = useRouter()
-const route = useRoute()
 const userStore = useUserStore()
 const collapsed = ref(false)
+const theme = ref(localStorage.getItem('sf-theme') || 'light')
+const mobileDrawer = ref(false)
 
-const selectedKeys = computed(() => [route.path.split('/')[2] || 'users'])
+const user = computed(() => ({ name: userStore.userInfo?.username || 'admin', avatar: '' }))
 
-const menus = [
-  { key: 'users', icon: UserOutlined, label: '用户管理', path: '/admin/users' },
-  { key: 'nodes', icon: ClusterOutlined, label: '节点管理', path: '/admin/nodes' },
-  { key: 'packages', icon: CrownOutlined, label: '套餐管理', path: '/admin/packages' },
-  { key: 'ddos', icon: ThunderboltOutlined, label: 'DDoS防护', path: '/admin/ddos' },
-  { key: 'waf', icon: SafetyOutlined, label: 'WAF管理', path: '/admin/waf' },
-  { key: 'ai', icon: RobotOutlined, label: 'AI防护', path: '/admin/ai' },
-  { key: 'system', icon: SettingOutlined, label: '系统设置', path: '/admin/system' },
-  { key: 'backup', icon: DatabaseOutlined, label: '数据备份', path: '/admin/backup' },
+const adminMenus = [
+  { key: 'users', label: '用户管理', icon: 'TeamOutlined', path: '/admin/users' },
+  { key: 'nodes', label: '节点管理', icon: 'ClusterOutlined', path: '/admin/nodes' },
+  { key: 'packages', label: '套餐管理', icon: 'AppstoreOutlined', path: '/admin/packages' },
+  { key: 'ddos', label: 'DDoS 防护', icon: 'WarningOutlined', path: '/admin/ddos' },
+  { key: 'waf', label: 'WAF 管理', icon: 'SafetyOutlined', path: '/admin/waf' },
+  { key: 'ai', label: 'AI 防护', icon: 'RobotOutlined', path: '/admin/ai' },
+  { key: 'system', label: '系统设置', icon: 'SettingOutlined', path: '/admin/system' },
+  { key: 'backup', label: '数据备份', icon: 'DatabaseOutlined', path: '/admin/backup' },
 ]
 
-function go(path) {
-  router.push(path)
+const antdTheme = computed(() => ({
+  token: {
+    colorPrimary: '#165dff',
+    borderRadius: 6,
+    fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
+  }
+}))
+
+const updateLayout = () => {
+  if (window.innerWidth <= 1024) collapsed.value = true
+  else collapsed.value = false
 }
 
-function handleLogout() {
+const toggleSidebar = () => {
+  if (window.innerWidth <= 1024) mobileDrawer.value = !mobileDrawer.value
+  else collapsed.value = !collapsed.value
+}
+
+const toggleTheme = () => {
+  theme.value = theme.value === 'light' ? 'dark' : 'light'
+  localStorage.setItem('sf-theme', theme.value)
+  document.documentElement.dataset.theme = theme.value
+}
+
+const handleLogout = () => {
   userStore.logout()
   router.push('/login')
 }
+const onFullscreen = () => {}
+const onRefresh = () => window.location.reload()
+
+onMounted(() => {
+  updateLayout()
+  window.addEventListener('resize', updateLayout)
+  document.documentElement.dataset.theme = theme.value
+})
 </script>
 
 <template>
-  <a-layout style="min-height: 100vh">
-    <a-layout-sider v-model:collapsed="collapsed" collapsible theme="dark">
-      <div class="logo">
-        <span v-if="!collapsed">ShieldFlow 管理端</span>
-        <span v-else>AD</span>
+  <a-config-provider :theme="antdTheme">
+    <div :class="['sf-app sf-app--admin', `sf-app--${theme}`]">
+      <div class="sf-admin-banner">
+        <SfIcon name="AlertFilled" :size="14" />
+        <span>管理员控制台 · 所有操作将记录审计日志</span>
       </div>
-      <a-menu
-        theme="dark"
-        mode="inline"
-        :selected-keys="selectedKeys"
-        @click="(e) => go(menus.find((m) => m.key === e.key)?.path || '/admin/users')"
+
+      <SfSidebar
+        :menus="adminMenus"
+        :collapsed="collapsed"
+        :theme="theme"
+        brand="Admin"
+        version="1.0.0"
+        @toggle="toggleSidebar"
+      />
+
+      <a-drawer
+        v-model:open="mobileDrawer"
+        placement="left"
+        :width="220"
+        :body-style="{ padding: 0 }"
+        :header-style="{ display: 'none' }"
       >
-        <a-menu-item v-for="m in menus" :key="m.key">
-          <component :is="m.icon" />
-          <span>{{ m.label }}</span>
-        </a-menu-item>
-      </a-menu>
-    </a-layout-sider>
-    <a-layout>
-      <a-layout-header class="header">
-        <component
-          :is="collapsed ? MenuUnfoldOutlined : MenuFoldOutlined"
-          class="trigger"
-          @click="collapsed = !collapsed"
+        <SfSidebar
+          :menus="adminMenus"
+          :collapsed="false"
+          :theme="theme"
+          brand="Admin"
+          version="1.0.0"
         />
-        <div class="header-right">
-          <a-button type="link" @click="go('/dashboard')">返回用户端</a-button>
-          <a-dropdown>
-            <a class="ant-dropdown-link" @click.prevent>
-              <UserOutlined /> {{ userStore.userInfo?.username || '管理员' }}
-            </a>
-            <template #overlay>
-              <a-menu>
-                <a-menu-item @click="handleLogout">
-                  <LogoutOutlined /> 退出登录
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
-        </div>
-      </a-layout-header>
-      <a-layout-content class="content">
-        <router-view />
-      </a-layout-content>
-    </a-layout>
-  </a-layout>
+      </a-drawer>
+
+      <div class="sf-app__main">
+        <SfTopbar
+          :menus="adminMenus"
+          :collapsed="collapsed"
+          :user="user"
+          :theme="theme"
+          @toggle-sidebar="toggleSidebar"
+          @toggle-theme="toggleTheme"
+          @logout="handleLogout"
+          @fullscreen="onFullscreen"
+          @refresh="onRefresh"
+        />
+        <main class="sf-app__content">
+          <router-view v-slot="{ Component }">
+            <transition name="sf-fade" mode="out-in">
+              <component :is="Component" />
+            </transition>
+          </router-view>
+        </main>
+      </div>
+    </div>
+  </a-config-provider>
 </template>
 
 <style scoped>
-.logo {
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.sf-app {
+  display: flex; min-height: 100vh; flex-direction: column;
+  background: var(--bg-page);
+  transition: background var(--dur-med) var(--ease);
+}
+
+.sf-admin-banner {
+  height: 28px;
+  background: var(--warning);
   color: #fff;
-  font-size: 18px;
-  font-weight: 600;
-  background: rgba(255, 255, 255, 0.08);
+  display: flex; align-items: center; justify-content: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-4);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
 }
-.header {
-  background: #fff;
-  padding: 0 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+
+.sf-app__main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.sf-app__content { flex: 1; padding: var(--sp-5); overflow-y: auto; }
+
+.sf-fade-enter-active, .sf-fade-leave-active { transition: opacity var(--dur-med) var(--ease); }
+.sf-fade-enter-from, .sf-fade-leave-to { opacity: 0; }
+
+@media (max-width: 1024px) {
+  :deep(.sf-sidebar:not(.sf-sidebar--collapsed)) { display: none; }
 }
-.trigger {
-  font-size: 18px;
-  cursor: pointer;
-  padding: 0 12px;
-}
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.content {
-  margin: 16px;
-  padding: 24px;
-  background: #fff;
-  border-radius: 8px;
-  min-height: 360px;
-  overflow-x: hidden;
+@media (max-width: 768px) {
+  .sf-app__content { padding: var(--sp-3); }
+  .sf-admin-banner { font-size: 11px; padding: 0 var(--sp-3); }
 }
 </style>

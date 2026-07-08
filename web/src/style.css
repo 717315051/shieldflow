@@ -1,67 +1,181 @@
-/* ShieldFlow 管理后台 全局样式 */
-html,
-body,
-#app {
-  height: 100%;
-  margin: 0;
-  padding: 0;
+/* ============================================================
+   ShieldFlow CDN Design Tokens
+   6 档字号 / 6 色调色板 / 暗色模式 / 动效曲线
+   ============================================================ */
+
+:root {
+  /* ---------- 类型 6 档 ---------- */
+  --fs-xs: 12px;    /* 单位/辅助 */
+  --fs-sm: 14px;    /* 正文 */
+  --fs-md: 16px;    /* 卡片副标 */
+  --fs-lg: 20px;    /* 页面副标题 */
+  --fs-xl: 24px;    /* stat 数字 */
+  --fs-2xl: 32px;   /* stat 强调数字 */
+
+  /* ---------- 间距 8 倍 ---------- */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+
+  /* ---------- 圆角 6 / 8 ---------- */
+  --r-sm: 4px; --r-md: 6px; --r-lg: 8px; --r-xl: 12px;
+
+  /* ---------- 边框 / 分隔线 ---------- */
+  --bw-1: 1px;
+  --bw-2: 2px;
+  --border-color: #e5e6eb;
+  --border-light: #f2f3f5;
+
+  /* ---------- 阴影 (极轻) ---------- */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.03);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-md: 0 2px 6px rgba(0,0,0,0.06);
+  /* 不再用大阴影,改用 1px 分隔线 */
+
+  /* ---------- 品牌色 (单一来源) ---------- */
+  --brand-primary: #165dff;
+  --brand-primary-hover: #4080ff;
+  --brand-primary-active: #0e42d2;
+  --brand-primary-soft: #ecf5fe;
+
+  /* ---------- 状态色 + 文字色 ---------- */
+  --text-primary: #1d2129;
+  --text-secondary: #4e5969;
+  --text-tertiary: #86909c;
+  --text-placeholder: #c9cdd4;
+
+  --success: #00b341;       --success-soft: #e8f9ed;
+  --warning: #ff7a00;       --warning-soft: #fff3e0;
+  --danger:  #f53f3f;       --danger-soft:   #ffecec;
+  --info:    #165dff;       --info-soft:    #ecf5fe;
+  --neutral: #86909c;       --neutral-soft: #f2f3f5;
+
+  /* ---------- 背景 ---------- */
+  --bg-page:  #f5f7fa;
+  --bg-card:  #ffffff;
+  --bg-hover: #f7f8fa;
+
+  /* ---------- 动效曲线 + 时长 ---------- */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur-med:  200ms;
+  --dur-slow: 300ms;
+
+  /* ---------- 字体 ---------- */
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Consolas, monospace;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  background: #f0f2f5;
-  color: rgba(0, 0, 0, 0.85);
+/* ============================================================
+   暗色模式 token (data-theme=dark 切换)
+   ============================================================ */
+:root[data-theme="dark"] {
+  --bg-page:  #0f1115;
+  --bg-card:  #1d2129;
+  --bg-hover: #2a2f3a;
+
+  --text-primary: #f5f7fa;
+  --text-secondary: #c9cdd4;
+  --text-tertiary: #86909c;
+  --text-placeholder: #4e5969;
+
+  --border-color: #2a2f3a;
+  --border-light: #232830;
+
+  --brand-primary: #4080ff;
+  --brand-primary-hover: #5c92ff;
+  --brand-primary-active: #2c66e8;
+  --brand-primary-soft: rgba(64, 128, 255, 0.12);
+
+  --success-soft: rgba(0, 179, 65, 0.12);
+  --warning-soft: rgba(255, 122, 0, 0.12);
+  --danger-soft:  rgba(245, 63, 63, 0.12);
+  --info-soft:    rgba(64, 128, 255, 0.12);
+  --neutral-soft: #232830;
+
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.25);
+  --shadow-md: 0 2px 6px rgba(0,0,0,0.3);
 }
 
-.page-container {
-  padding: 24px;
+/* ============================================================
+   全局重置 (跟着 token 走)
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #app {
+  margin: 0; padding: 0;
+  font-family: var(--font-sans);
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+  background: var(--bg-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background var(--dur-med) var(--ease), color var(--dur-med) var(--ease);
 }
 
-.page-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  gap: 12px;
+/* 6 档标题 (全局可用) */
+h1 { font-size: var(--fs-2xl); font-weight: 700; margin: 0 0 var(--sp-4); }
+h2 { font-size: var(--fs-lg); font-weight: 600; margin: 0 0 var(--sp-3); }
+h3 { font-size: var(--fs-md); font-weight: 600; margin: 0 0 var(--sp-2); }
+h4 { font-size: var(--fs-sm); font-weight: 600; margin: 0 0 var(--sp-2); }
+.text-xs { font-size: var(--fs-xs); }
+.text-sm { font-size: var(--fs-sm); }
+.text-md { font-size: var(--fs-md); }
+.text-lg { font-size: var(--fs-lg); }
+.text-xl { font-size: var(--fs-xl); }
+.text-2xl { font-size: var(--fs-2xl); }
+.text-secondary { color: var(--text-secondary); }
+.text-tertiary  { color: var(--text-tertiary); }
+.text-mono      { font-family: var(--font-mono); }
+.text-bold      { font-weight: 700; }
+.text-num       { font-variant-numeric: tabular-nums; }
+
+/* 通用工具 */
+.divider { height: 1px; background: var(--border-color); margin: var(--sp-4) 0; }
+.divider-light { height: 1px; background: var(--border-light); }
+
+/* 状态色徽章 (统一格式: 圆点 + 文字) */
+.sf-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--r-md);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 1.5;
+}
+.sf-badge::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor;
+  opacity: 0.8;
+}
+.sf-badge--success { color: var(--success); background: var(--success-soft); }
+.sf-badge--warning { color: var(--warning); background: var(--warning-soft); }
+.sf-badge--danger  { color: var(--danger);  background: var(--danger-soft); }
+.sf-badge--info    { color: var(--info);    background: var(--info-soft); }
+.sf-badge--neutral { color: var(--neutral); background: var(--neutral-soft); }
+
+/* 空状态 */
+.sf-empty {
+  padding: var(--sp-10) var(--sp-4);
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+}
+.sf-empty__icon { font-size: 48px; opacity: 0.4; margin-bottom: var(--sp-3); }
+
+/* 全局动效 */
+.sf-fade-enter-active, .sf-fade-leave-active { transition: opacity var(--dur-med) var(--ease); }
+.sf-fade-enter-from, .sf-fade-leave-to { opacity: 0; }
+
+/* Ant Design Vue 4 暗色模式兼容 (Token override) */
+:root[data-theme="dark"] {
+  --ant-color-bg-base: var(--bg-page);
+  --ant-color-text: var(--text-primary);
+  --ant-color-border: var(--border-color);
+  --ant-color-fill-tertiary: var(--bg-hover);
 }
 
-.page-toolbar .left,
-.page-toolbar .right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.chart-box {
-  width: 100%;
-  height: 320px;
-}
-
-.stat-card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.flex-gap {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.text-muted {
-  color: rgba(0, 0, 0, 0.45);
-}
-
-.text-success {
-  color: #52c41a;
-}
-
-.text-danger {
-  color: #ff4d4f;
-}
+/* 滚动条 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }

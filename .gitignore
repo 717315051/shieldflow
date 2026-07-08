@@ -1,0 +1,53 @@
+# ============================================================
+# ShieldFlow CDN .gitignore
+# ============================================================
+
+# Go
+*.exe
+*.test
+*.out
+*.prof
+/vendor/
+/bin/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Node / Vite
+web/node_modules/
+web/dist/
+web/.vite/
+
+# 临时 / 构建产物
+*.tar.gz
+*.tgz
+*.zip
+*.tar
+*.bak
+*.tmp
+
+# Frontend: 不要 lock file (避免依赖锁死,容许多版本)
+# web/pnpm-lock.yaml
+web/test-puppeteer.cjs
+
+# 测试 fixture 产物
+/fixtures/*.json
+/coverage/
+*.cover
+
+# 部署用的临时证书 / ssh key
+*.pem
+*.key
+id_rsa*
+
+# local scripts 不要上传到公网 (避免泄露 server secret)
+# scripts/sync-to-github.sh  (本地一键 push 脚本)
+
+# 临时下载的大 binary
+go1.22.10.linux-amd64.tar.gz

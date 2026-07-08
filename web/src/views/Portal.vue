@@ -43,7 +43,9 @@
         <h2 class="section-title">功能特性</h2>
         <div class="feature-grid">
           <div class="feature-card" v-for="f in features" :key="f.title">
-            <div class="feature-icon">{{ f.icon }}</div>
+            <div class="feature-icon">
+              <component :is="f.icon" :style="{ fontSize: '32px' }" />
+            </div>
             <h3>{{ f.title }}</h3>
             <p>{{ f.desc }}</p>
           </div>
@@ -94,15 +96,20 @@
 </template>
 
 <script setup>
+import {
+  SafetyOutlined, FireOutlined, ThunderboltOutlined, RobotOutlined,
+  GlobalOutlined, SafetyCertificateOutlined, LineChartOutlined, SyncOutlined,
+} from '@ant-design/icons-vue'
+
 const features = [
-  { icon: '🛡️', title: 'DDoS防护', desc: 'eBPF四层+七层CC防护，T级防护能力，自动封禁恶意IP' },
-  { icon: '🔥', title: 'WAF语义分析', desc: 'AI驱动的语义WAF，精准识别SQL注入/XSS/RCE等17类攻击' },
-  { icon: '⚡', title: 'CDN加速', desc: '二级缓存架构，智能回源，HTTP/2&3支持，Gzip/Brotli压缩' },
-  { icon: '🤖', title: 'AI智能防护', desc: '敏感词检测、语义WAF、威胁情报，多模型支持' },
-  { icon: '🌐', title: '多DNS支持', desc: 'Cloudflare/阿里云/腾讯云DNSPod，自动CNAME同步' },
-  { icon: '🔒', title: 'SSL证书', desc: 'ACME自动申请，Let\'s Encrypt/ZeroSSL，HTTP/DNS验证' },
-  { icon: '📊', title: '实时监控', desc: '访问日志/攻击日志/流量统计/地理分布，ClickHouse存储' },
-  { icon: '🔄', title: '缓存管理', desc: '文件刷新/目录刷新/文件预热，批量操作' },
+  { icon: 'SafetyOutlined', title: 'DDoS防护', desc: 'eBPF四层+七层CC防护，T级防护能力，自动封禁恶意IP' },
+  { icon: 'FireOutlined', title: 'WAF语义分析', desc: 'AI驱动的语义WAF，精准识别SQL注入/XSS/RCE等17类攻击' },
+  { icon: 'ThunderboltOutlined', title: 'CDN加速', desc: '二级缓存架构，智能回源，HTTP/2&3支持，Gzip/Brotli压缩' },
+  { icon: 'RobotOutlined', title: 'AI智能防护', desc: '敏感词检测、语义WAF、威胁情报，多模型支持' },
+  { icon: 'GlobalOutlined', title: '多DNS支持', desc: 'Cloudflare/阿里云/腾讯云DNSPod，自动CNAME同步' },
+  { icon: 'SafetyCertificateOutlined', title: 'SSL证书', desc: 'ACME自动申请，Let\'s Encrypt/ZeroSSL，HTTP/DNS验证' },
+  { icon: 'LineChartOutlined', title: '实时监控', desc: '访问日志/攻击日志/流量统计/地理分布，ClickHouse存储' },
+  { icon: 'SyncOutlined', title: '缓存管理', desc: '文件刷新/目录刷新/文件预热，批量操作' },
 ]
 
 const protectionLayers = [

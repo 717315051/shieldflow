@@ -1,145 +1,152 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
-import {
-  DashboardOutlined,
-  GlobalOutlined,
-  SafetyCertificateOutlined,
-  FileTextOutlined,
-  BarChartOutlined,
-  CloudOutlined,
-  ApartmentOutlined,
-  SafetyOutlined,
-  CrownOutlined,
-  UserOutlined,
-  SettingOutlined,
-  LogoutOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-} from '@ant-design/icons-vue'
+import SfSidebar from '../components/SfSidebar.vue'
+import SfTopbar from '../components/SfTopbar.vue'
 
 const router = useRouter()
-const route = useRoute()
 const userStore = useUserStore()
 const collapsed = ref(false)
+const theme = ref(localStorage.getItem('sf-theme') || 'light')
+const mobileDrawer = ref(false)
 
-const selectedKeys = computed(() => {
-  const path = route.path
-  if (path.startsWith('/domains')) return ['domains']
-  return [path.split('/')[1] || 'dashboard']
-})
+const user = computed(() => ({ name: userStore.userInfo?.username || 'user', avatar: '' }))
 
-const openKeys = ref(['sub1'])
-
-const menus = [
-  { key: 'dashboard', icon: DashboardOutlined, label: '仪表盘', path: '/dashboard' },
-  { key: 'domains', icon: GlobalOutlined, label: '域名管理', path: '/domains' },
-  { key: 'certificates', icon: SafetyCertificateOutlined, label: 'SSL证书', path: '/certificates' },
-  { key: 'logs', icon: FileTextOutlined, label: '日志管理', path: '/logs' },
-  { key: 'traffic', icon: BarChartOutlined, label: '流量统计', path: '/traffic' },
-  { key: 'cache', icon: CloudOutlined, label: '缓存管理', path: '/cache' },
-  { key: 'layer4', icon: ApartmentOutlined, label: '四层转发', path: '/layer4' },
-  { key: 'protection', icon: SafetyOutlined, label: '防护管理', path: '/protection' },
-  { key: 'packages', icon: CrownOutlined, label: '套餐管理', path: '/packages' },
+// 用线性 icon 替换 emoji
+const userMenus = [
+  { key: 'dash', label: '仪表盘', icon: 'DashboardOutlined', path: '/dashboard' },
+  { key: 'domain', label: '域名管理', icon: 'GlobalOutlined',
+    children: [
+      { label: '域名列表', path: '/domains' },
+    ]
+  },
+  { key: 'cert', label: 'SSL 证书', icon: 'SafetyCertificateOutlined', path: '/certificates' },
+  { key: 'cache', label: '缓存管理', icon: 'ThunderboltOutlined', path: '/cache' },
+  { key: 'layer4', label: '四层转发', icon: 'SwapOutlined', path: '/layer4' },
+  { key: 'protection', label: '防护管理', icon: 'SafetyOutlined', path: '/protection' },
+  { key: 'packages', label: '套餐管理', icon: 'AppstoreOutlined',
+    children: [
+      { label: '套餐列表', path: '/packages' },
+      { label: '套餐用量', path: '/user-package-usage' },
+    ]
+  },
+  { key: 'logs', label: '日志管理', icon: 'FileTextOutlined', path: '/logs' },
+  { key: 'traffic', label: '流量统计', icon: 'LineChartOutlined', path: '/traffic' },
+  { key: 'realname', label: '实名认证', icon: 'UserOutlined', path: '/realname' },
 ]
 
-function go(path) {
-  router.push(path)
+const antdTheme = computed(() => ({
+  token: {
+    colorPrimary: '#165dff',
+    borderRadius: 6,
+    fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
+  }
+}))
+
+// 响应式: 1024px 以下侧栏收起
+const updateLayout = () => {
+  if (window.innerWidth <= 1024) {
+    collapsed.value = true
+  } else {
+    collapsed.value = false
+  }
 }
 
-function handleLogout() {
+const toggleSidebar = () => {
+  if (window.innerWidth <= 1024) mobileDrawer.value = !mobileDrawer.value
+  else collapsed.value = !collapsed.value
+}
+
+const toggleTheme = () => {
+  theme.value = theme.value === 'light' ? 'dark' : 'light'
+  localStorage.setItem('sf-theme', theme.value)
+  document.documentElement.dataset.theme = theme.value
+}
+
+const handleLogout = () => {
   userStore.logout()
   router.push('/login')
 }
+
+const onFullscreen = () => {}
+const onRefresh = () => window.location.reload()
+
+onMounted(() => {
+  updateLayout()
+  window.addEventListener('resize', updateLayout)
+  document.documentElement.dataset.theme = theme.value
+})
 </script>
 
 <template>
-  <a-layout style="min-height: 100vh">
-    <a-layout-sider v-model:collapsed="collapsed" collapsible>
-      <div class="logo">
-        <span v-if="!collapsed">ShieldFlow 控制台</span>
-        <span v-else>ZY</span>
-      </div>
-      <a-menu
-        theme="dark"
-        mode="inline"
-        :selected-keys="selectedKeys"
-        @click="(e) => go(menus.find((m) => m.key === e.key)?.path || '/dashboard')"
+  <a-config-provider :theme="antdTheme">
+    <div :class="['sf-app', `sf-app--${theme}`]">
+      <SfSidebar
+        :menus="userMenus"
+        :collapsed="collapsed"
+        :theme="theme"
+        brand="SCDN"
+        version="1.0.0"
+        @toggle="toggleSidebar"
+      />
+
+      <a-drawer
+        v-model:open="mobileDrawer"
+        placement="left"
+        :width="220"
+        :body-style="{ padding: 0 }"
+        :header-style="{ display: 'none' }"
       >
-        <a-menu-item v-for="m in menus" :key="m.key">
-          <component :is="m.icon" />
-          <span>{{ m.label }}</span>
-        </a-menu-item>
-      </a-menu>
-    </a-layout-sider>
-    <a-layout>
-      <a-layout-header class="header">
-        <component
-          :is="collapsed ? MenuUnfoldOutlined : MenuFoldOutlined"
-          class="trigger"
-          @click="collapsed = !collapsed"
+        <SfSidebar
+          :menus="userMenus"
+          :collapsed="false"
+          :theme="theme"
+          brand="SCDN"
+          version="1.0.0"
         />
-        <div class="header-right">
-          <a-button v-if="userStore.isAdmin" type="link" @click="go('/admin/users')">
-            <SettingOutlined /> 管理后台
-          </a-button>
-          <a-dropdown>
-            <a class="ant-dropdown-link" @click.prevent>
-              <UserOutlined /> {{ userStore.userInfo?.username || '用户' }}
-            </a>
-            <template #overlay>
-              <a-menu>
-                <a-menu-item @click="handleLogout">
-                  <LogoutOutlined /> 退出登录
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
-        </div>
-      </a-layout-header>
-      <a-layout-content class="content">
-        <router-view />
-      </a-layout-content>
-    </a-layout>
-  </a-layout>
+      </a-drawer>
+
+      <div class="sf-app__main">
+        <SfTopbar
+          :menus="userMenus"
+          :collapsed="collapsed"
+          :user="user"
+          :theme="theme"
+          @toggle-sidebar="toggleSidebar"
+          @toggle-theme="toggleTheme"
+          @logout="handleLogout"
+          @fullscreen="onFullscreen"
+          @refresh="onRefresh"
+        />
+        <main class="sf-app__content">
+          <router-view v-slot="{ Component }">
+            <transition name="sf-fade" mode="out-in">
+              <component :is="Component" />
+            </transition>
+          </router-view>
+        </main>
+      </div>
+    </div>
+  </a-config-provider>
 </template>
 
 <style scoped>
-.logo {
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 18px;
-  font-weight: 600;
-  background: rgba(255, 255, 255, 0.08);
+.sf-app {
+  display: flex; min-height: 100vh;
+  background: var(--bg-page);
+  transition: background var(--dur-med) var(--ease);
 }
-.header {
-  background: #fff;
-  padding: 0 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+.sf-app__main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.sf-app__content { flex: 1; padding: var(--sp-5); overflow-y: auto; }
+
+.sf-fade-enter-active, .sf-fade-leave-active { transition: opacity var(--dur-med) var(--ease); }
+.sf-fade-enter-from, .sf-fade-leave-to { opacity: 0; }
+
+@media (max-width: 1024px) {
+  :deep(.sf-sidebar:not(.sf-sidebar--collapsed)) { display: none; }
 }
-.trigger {
-  font-size: 18px;
-  cursor: pointer;
-  padding: 0 12px;
-}
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.content {
-  margin: 16px;
-  padding: 24px;
-  background: #fff;
-  border-radius: 8px;
-  min-height: 360px;
-  overflow-x: hidden;
+@media (max-width: 768px) {
+  .sf-app__content { padding: var(--sp-3); }
 }
 </style>

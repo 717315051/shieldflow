@@ -4,20 +4,26 @@ import request from '../utils/request'
 export const authApi = {
   login: (data) => request.post('/auth/login', data),
   register: (data) => request.post('/auth/register', data),
+  logout: () => request.post('/auth/logout'),
   profile: () => request.get('/auth/profile'),
   updateProfile: (data) => request.put('/auth/profile', data),
+  changePassword: (data) => request.put('/auth/password', data),
   captcha: () => `/api/v1/auth/captcha?t=${Date.now()}`,
+  sendEmailCode: (email) => request.post('/auth/send-email-code', { email }),
+  verifyCode: (data) => request.post('/auth/verify-code', data),
   forgotPassword: (email) => request.post('/auth/forgot-password', { email }),
   resetPassword: (email, code, newPassword) =>
     request.post('/auth/reset-password', { email, code, new_password: newPassword }),
+  realname: (data) => request.post('/auth/realname', data),
 }
 
 // ============ 仪表盘 ============
+// 后端只有一个聚合端点: GET /api/v1/dashboard/analysis
+// 前端从同一份响应里切出 overview / traffic / geo 三块
 export const dashboardApi = {
-  overview: () => request.get('/dashboard/overview'),
-  traffic: (params) => request.get('/dashboard/traffic', { params }),
-  geo: () => request.get('/dashboard/geo'),
-  requests: (params) => request.get('/dashboard/requests', { params }),
+  overview: () => request.get('/dashboard/analysis'),
+  traffic: (params) => request.get('/dashboard/analysis', { params }),
+  geo: () => request.get('/dashboard/analysis'),
 }
 
 // ============ 域名管理 ============
@@ -99,14 +105,39 @@ export const protectionApi = {
   delBlacklist: (id) => request.delete(`/protection/blacklist/${id}`),
 }
 
-// ============ 套餐（用户端） ============
+// ============ 套餐（用户端，按 API.md 文档）============
+// 文档路径：
+//   GET    /api/v1/packages            套餐列表（l7/l4）
+//   GET    /api/v1/packages/traffic    流量包列表
+//   GET    /api/v1/packages/domain     域名包列表
+//   GET    /api/v1/packages/market     套餐市场（聚合 3 类 + 余额）
+//   GET    /api/v1/user-packages       我的套餐
+//   GET    /api/v1/user-packages/:id   套餐详情
+//   POST   /api/v1/user-packages/:id/renew  续费
+//   GET    /api/v1/orders              订单列表
+//   GET    /api/v1/orders/:id          订单详情
+//   GET    /api/v1/balance             余额
+//   POST   /api/v1/balance/recharge    充值
 export const packageApi = {
+  // 套餐市场
+  list: (params) => request.get('/packages', { params }),
+  traffic: (params) => request.get('/packages/traffic', { params }),
+  domain: (params) => request.get('/packages/domain', { params }),
   market: (params) => request.get('/packages/market', { params }),
-  mine: (params) => request.get('/packages/mine', { params }),
-  orders: (params) => request.get('/packages/orders', { params }),
-  buy: (data) => request.post('/packages/buy', data),
-  balance: () => request.get('/packages/balance'),
-  recharge: (data) => request.post('/packages/recharge', data),
+  // 购买
+  purchase: (id, data) => request.post(`/packages/${id}/purchase`, data || {}),
+  purchaseTraffic: (id, data) => request.post(`/packages/traffic/${id}/purchase`, data || {}),
+  purchaseDomain: (id, data) => request.post(`/packages/domain/${id}/purchase`, data || {}),
+  // 我的套餐
+  myPackages: (params) => request.get('/user-packages', { params }),
+  packageDetail: (id) => request.get(`/user-packages/${id}`),
+  renew: (id, data) => request.post(`/user-packages/${id}/renew`, data || {}),
+  // 订单
+  orders: (params) => request.get('/orders', { params }),
+  orderDetail: (id) => request.get(`/orders/${id}`),
+  // 余额
+  balance: () => request.get('/balance'),
+  recharge: (data) => request.post('/balance/recharge', data),
 }
 
 // ============ 管理端 - 用户 ============
@@ -154,22 +185,58 @@ export const adminDdosApi = {
   logs: (params) => request.get('/admin/ddos/logs', { params }),
 }
 
-// ============ 管理端 - 系统 ============
+// ============ 管理端 - 系统设置 ============
+// 后端路由：
+//   GET    /api/v1/admin/system/settings
+//   PUT    /api/v1/admin/system/settings
+//   GET    /api/v1/admin/system/dns
+//   PUT    /api/v1/admin/system/dns
+//   GET    /api/v1/admin/system/acme
+//   PUT    /api/v1/admin/system/acme
+//   GET    /api/v1/admin/system/grpc
+//   PUT    /api/v1/admin/system/grpc
+//   POST   /api/v1/admin/system/grpc/test-log-server
+//   GET    /api/v1/admin/system/alert
+//   PUT    /api/v1/admin/system/alert
+//   GET    /api/v1/admin/system/ai
+//   PUT    /api/v1/admin/system/ai
 export const adminSystemApi = {
-  get: () => request.get('/admin/system'),
-  update: (data) => request.put('/admin/system', data),
-  testAlert: (data) => request.post('/admin/system/test-alert', data),
-  backup: () => request.post('/admin/system/backup'),
+  // 通用设置
+  getSettings: () => request.get('/admin/system/settings'),
+  updateSettings: (data) => request.put('/admin/system/settings', data),
+  // DNS
+  getDNS: () => request.get('/admin/system/dns'),
+  updateDNS: (data) => request.put('/admin/system/dns', data),
+  // ACME
+  getACME: () => request.get('/admin/system/acme'),
+  updateACME: (data) => request.put('/admin/system/acme', data),
+  // GRPC + 测试
+  getGRPC: () => request.get('/admin/system/grpc'),
+  updateGRPC: (data) => request.put('/admin/system/grpc', data),
+  testLogServer: (data) => request.post('/admin/system/grpc/test-log-server', data),
+  // 告警
+  getAlert: () => request.get('/admin/system/alert'),
+  updateAlert: (data) => request.put('/admin/system/alert', data),
+  // AI
+  getAI: () => request.get('/admin/system/ai'),
+  updateAI: (data) => request.put('/admin/system/ai', data),
+  // 版本/升级
+  getVersion: () => request.get('/admin/system/version'),
+  upgrade: (data) => request.post('/admin/system/upgrade', data),
 }
 
 // ============ 管理端 - 备份 ============
+// 后端路由：
+//   GET    /api/v1/admin/system/backup
+//   POST   /api/v1/admin/system/backup
+//   POST   /api/v1/admin/system/backup/:id/restore
+//   GET    /api/v1/admin/system/backup/:id/download  (待后端补)
 export const adminBackupApi = {
-  list: (params) => request.get('/admin/backups', { params }),
-  create: (data) => request.post('/admin/backups', data),
-  restore: (id) => request.post(`/admin/backups/${id}/restore`),
-  delete: (id) => request.delete(`/admin/backups/${id}`),
-  download: (id) =>
-    request.get(`/admin/backups/${id}/download`, { responseType: 'blob' }),
+  list: (params) => request.get('/admin/system/backup', { params }),
+  create: () => request.post('/admin/system/backup'),
+  restore: (id) => request.post(`/admin/system/backup/${id}/restore`),
+  delete: (id) => request.delete(`/admin/system/backup/${id}`),
+  downloadUrl: (id) => `/api/v1/admin/system/backup/${id}/download`,
 }
 
 // ============ 管理端 - WAF ============

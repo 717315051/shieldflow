@@ -44,6 +44,16 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('shieldflow_user')
   }
 
+  function setUserInfo(info) {
+    userInfo.value = info
+    localStorage.setItem('shieldflow_user', JSON.stringify(info))
+  }
+
+  function setToken(t) {
+    token.value = t
+    localStorage.setItem('shieldflow_token', t)
+  }
+
   return {
     token,
     userInfo,
@@ -53,5 +63,7 @@ export const useUserStore = defineStore('user', () => {
     fetchProfile,
     updateProfile,
     logout,
+    setUserInfo,
+    setToken,
   }
 })

@@ -58,7 +58,7 @@
 import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
-import request from '@/utils/request'
+import { adminSystemApi, adminBackupApi } from '@/api'
 
 const creating = ref(false)
 const backups = ref([])
@@ -77,24 +77,27 @@ const pagination = ref({ current: 1, pageSize: 20, total: 0 })
 
 const formatSize = (bytes) => {
   if (!bytes) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
+  // 后端 size 可能是字符串（如 "8.50 MB"）或数字，统一用 parseFloat
+  let n = parseFloat(bytes)
+  if (isNaN(n) || n === 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
   let i = 0
-  while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++ }
-  return bytes.toFixed(2) + ' ' + units[i]
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++ }
+  return n.toFixed(2) + ' ' + units[i]
 }
 
 const fetchBackups = async () => {
   try {
-    const r = await request.get('/admin/system/backup')
-    backups.value = r.data?.data?.list || []
-    pagination.value.total = r.data?.data?.total || 0
+    const r = await adminBackupApi.list()
+    backups.value = r.data?.list || []
+    pagination.value.total = r.data?.total || 0
   } catch(e) { message.error('获取备份列表失败') }
 }
 
 const createBackup = async () => {
   creating.value = true
   try {
-    await request.post('/admin/system/backup')
+    await adminBackupApi.create()
     message.success('备份任务已创建')
     fetchBackups()
   } catch(e) { message.error('创建备份失败') }
@@ -102,19 +105,19 @@ const createBackup = async () => {
 }
 
 const downloadBackup = (record) => {
-  window.open(`/api/v1/admin/system/backup/${record.id}/download`, '_blank')
+  window.open(adminBackupApi.downloadUrl(record.id), '_blank')
 }
 
 const restoreBackup = async (record) => {
   try {
-    await request.post(`/admin/system/backup/${record.id}/restore`)
+    await adminBackupApi.restore(record.id)
     message.success('恢复任务已启动')
   } catch(e) { message.error('恢复失败') }
 }
 
 const deleteBackup = async (record) => {
   try {
-    await request.delete(`/admin/system/backup/${record.id}`)
+    await adminBackupApi.delete(record.id)
     message.success('已删除')
     fetchBackups()
   } catch(e) { message.error('删除失败') }
@@ -122,7 +125,7 @@ const deleteBackup = async (record) => {
 
 const saveAutoBackup = async () => {
   try {
-    await request.put('/admin/system/settings', { auto_backup: autoBackup.value })
+    await adminSystemApi.updateSettings({ auto_backup: autoBackup.value })
     message.success('设置已保存')
   } catch(e) { message.error('保存失败') }
 }

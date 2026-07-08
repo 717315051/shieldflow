@@ -640,6 +640,90 @@ func SystemBackupRestore(c *gin.Context) {
 }
 
 // ------------------------------------------------------------
+// SystemBackupDownload 下载备份文件
+// GET /api/v1/admin/system/backup/:id/download
+// id 即备份文件名
+// ------------------------------------------------------------
+func SystemBackupDownload(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
+
+	backupID := c.Param("id")
+	if backupID == "" {
+		sysFail(c, 400, "备份 ID 不能为空")
+		return
+	}
+
+	metaStr := getSetting(db, "backup."+backupID)
+	if metaStr == "" {
+		sysFail(c, 404, "备份不存在")
+		return
+	}
+
+	backupDir := getSetting(db, "system.backup_dir")
+	if backupDir == "" {
+		backupDir = "/var/lib/shieldflow/backups"
+	}
+	backupPath := filepath.Join(backupDir, backupID)
+
+	if _, err := os.Stat(backupPath); err != nil {
+		sysFail(c, 404, fmt.Sprintf("备份文件不存在: %s", backupPath))
+		return
+	}
+
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Transfer-Encoding", "binary")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", backupID))
+	c.Header("Content-Type", "application/octet-stream")
+	c.File(backupPath)
+}
+
+// ------------------------------------------------------------
+// SystemBackupDelete 删除备份
+// DELETE /api/v1/admin/system/backup/:id
+// id 即备份文件名
+// ------------------------------------------------------------
+func SystemBackupDelete(c *gin.Context) {
+	db := c.MustGet("db").(*gorm.DB)
+
+	backupID := c.Param("id")
+	if backupID == "" {
+		sysFail(c, 400, "备份 ID 不能为空")
+		return
+	}
+
+	metaStr := getSetting(db, "backup."+backupID)
+	if metaStr == "" {
+		sysFail(c, 404, "备份不存在")
+		return
+	}
+
+	backupDir := getSetting(db, "system.backup_dir")
+	if backupDir == "" {
+		backupDir = "/var/lib/shieldflow/backups"
+	}
+	backupPath := filepath.Join(backupDir, backupID)
+
+	// 删除文件(若存在)
+	if _, err := os.Stat(backupPath); err == nil {
+		if err := os.Remove(backupPath); err != nil {
+			sysFail(c, 500, fmt.Sprintf("删除备份文件失败: %v", err))
+			return
+		}
+	}
+
+	// 删除元数据
+	var s models.SystemSetting
+	if err := db.Where("key = ?", "backup."+backupID).First(&s).Error; err == nil {
+		if err := db.Delete(&s).Error; err != nil {
+			sysFail(c, 500, fmt.Sprintf("删除备份元数据失败: %v", err))
+			return
+		}
+	}
+
+	sysSuccess(c, gin.H{"backup_id": backupID, "status": "deleted"})
+}
+
+// ------------------------------------------------------------
 // SystemVersion 系统版本信息
 // GET /api/v1/admin/system/version
 // ------------------------------------------------------------

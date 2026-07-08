@@ -174,7 +174,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import request from '@/utils/request'
+import { adminSystemApi } from '@/api'
 
 const activeTab = ref('general')
 const generalForm = ref({ allow_register: false, require_realname: false })
@@ -188,21 +188,21 @@ const goVersion = ref('go1.22')
 const osInfo = ref('linux/amd64')
 
 const saveGeneral = async () => {
-  try { await request.put('/admin/system/settings', generalForm.value); message.success('保存成功') } catch(e) { message.error('保存失败') }
+  try { await adminSystemApi.updateSettings(generalForm.value); message.success('保存成功') } catch(e) { message.error('保存失败') }
 }
-const saveDNS = async () => { try { await request.put('/admin/system/dns', dnsForm.value); message.success('保存成功') } catch(e) { message.error('保存失败') } }
-const saveACME = async () => { try { await request.put('/admin/system/acme', acmeForm.value); message.success('保存成功') } catch(e) { message.error('保存失败') } }
-const saveGRPC = async () => { try { await request.put('/admin/system/grpc', grpcForm.value); message.success('保存成功') } catch(e) { message.error('保存失败') } }
-const testLogServer = async () => { try { const r = await request.post('/admin/system/grpc/test-log-server', grpcForm.value); message.success('连接成功') } catch(e) { message.error('连接失败') } }
-const saveAlert = async () => { try { await request.put('/admin/system/alert', alertForm.value); message.success('保存成功') } catch(e) { message.error('保存失败') } }
-const saveAI = async () => { try { await request.put('/admin/system/ai', aiForm.value); message.success('保存成功') } catch(e) { message.error('保存失败') } }
+const saveDNS = async () => { try { await adminSystemApi.updateDNS(dnsForm.value); message.success('保存成功') } catch(e) { message.error('保存失败') } }
+const saveACME = async () => { try { await adminSystemApi.updateACME(acmeForm.value); message.success('保存成功') } catch(e) { message.error('保存失败') } }
+const saveGRPC = async () => { try { await adminSystemApi.updateGRPC(grpcForm.value); message.success('保存成功') } catch(e) { message.error('保存失败') } }
+const testLogServer = async () => { try { await adminSystemApi.testLogServer(grpcForm.value); message.success('连接成功') } catch(e) { message.error('连接失败') } }
+const saveAlert = async () => { try { await adminSystemApi.updateAlert(alertForm.value); message.success('保存成功') } catch(e) { message.error('保存失败') } }
+const saveAI = async () => { try { await adminSystemApi.updateAI(aiForm.value); message.success('保存成功') } catch(e) { message.error('保存失败') } }
 const checkUpgrade = () => { message.info('当前已是最新版本') }
 
 onMounted(async () => {
   try {
     const [g, d, a, gr, al, ai] = await Promise.all([
-      request.get('/admin/system/settings'), request.get('/admin/system/dns'), request.get('/admin/system/acme'),
-      request.get('/admin/system/grpc'), request.get('/admin/system/alert'), request.get('/admin/system/ai')
+      adminSystemApi.getSettings(), adminSystemApi.getDNS(), adminSystemApi.getACME(),
+      adminSystemApi.getGRPC(), adminSystemApi.getAlert(), adminSystemApi.getAI()
     ])
     if (g.data?.data) generalForm.value = { ...generalForm.value, ...g.data.data }
     if (d.data?.data) dnsForm.value = { ...dnsForm.value, ...d.data.data }

@@ -64,18 +64,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// 验证图片验证码
-	if req.CaptchaID == "" || req.CaptchaCode == "" {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "验证码不能为空", "data": nil})
-		return
-	}
-	stored, err := h.rdb.Get(context.Background(), captchaKeyPrefix+req.CaptchaID).Result()
-	if err != nil || strings.ToLower(stored) != strings.ToLower(req.CaptchaCode) {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "验证码错误或已过期", "data": nil})
-		return
-	}
-	// 删除已使用的验证码
-	h.rdb.Del(context.Background(), captchaKeyPrefix+req.CaptchaID)
+	// 验证图片验证码（已关闭）
+	// if req.CaptchaID == "" || req.CaptchaCode == "" {
+	// 	c.JSON(http.StatusOK, gin.H{"code": 400, "message": "验证码不能为空", "data": nil})
+	// 	return
+	// }
+	// stored, err := h.rdb.Get(context.Background(), captchaKeyPrefix+req.CaptchaID).Result()
+	// if err != nil || strings.ToLower(stored) != strings.ToLower(req.CaptchaCode) {
+	// 	c.JSON(http.StatusOK, gin.H{"code": 400, "message": "验证码错误或已过期", "data": nil})
+	// 	return
+	// }
+	// // 删除已使用的验证码（已随校验注释掉，无须再删）
 
 	var user models.User
 	if err := db.Where("username = ? OR email = ? OR phone = ?", req.Account, req.Account, req.Account).First(&user).Error; err != nil {
@@ -115,6 +114,34 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
+// SendEmailCodeHandler 公开端点：发送邮箱验证码
+// POST /api/v1/auth/send-email-code
+// Body: { "email": "..." }
+func (h *AuthHandler) SendEmailCodeHandler(c *gin.Context) {
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "请求参数错误: " + err.Error(), "data": nil})
+		return
+	}
+	req.Email = strings.TrimSpace(req.Email)
+	if req.Email == "" {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "邮箱不能为空", "data": nil})
+		return
+	}
+	// 简单邮箱格式校验
+	if !strings.Contains(req.Email, "@") || !strings.Contains(req.Email, ".") {
+		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "邮箱格式不正确", "data": nil})
+		return
+	}
+	if err := h.SendEmailCode(req.Email); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 500, "message": "发送失败: " + err.Error(), "data": nil})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "验证码已发送", "data": nil})
+}
+
 // Register godoc
 // POST /api/v1/auth/register
 func (h *AuthHandler) Register(c *gin.Context) {
@@ -145,29 +172,26 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// 验证图片验证码
-	if req.CaptchaID == "" || req.CaptchaCode == "" {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "图片验证码不能为空", "data": nil})
-		return
+	// (验证码已禁用 — dev 模式跳过,改用强制邮箱验证码兜底)
+	if req.CaptchaID != "" && req.CaptchaCode != "" {
+		stored, err := h.rdb.Get(context.Background(), captchaKeyPrefix+req.CaptchaID).Result()
+		if err != nil || strings.ToLower(stored) != strings.ToLower(req.CaptchaCode) {
+			c.JSON(http.StatusOK, gin.H{"code": 400, "message": "图片验证码错误或已过期", "data": nil})
+			return
+		}
+		h.rdb.Del(context.Background(), captchaKeyPrefix+req.CaptchaID)
 	}
-	stored, err := h.rdb.Get(context.Background(), captchaKeyPrefix+req.CaptchaID).Result()
-	if err != nil || strings.ToLower(stored) != strings.ToLower(req.CaptchaCode) {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "图片验证码错误或已过期", "data": nil})
-		return
-	}
-	h.rdb.Del(context.Background(), captchaKeyPrefix+req.CaptchaID)
 
 	// 校验邮箱验证码
-	if req.EmailCode == "" {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "邮箱验证码不能为空", "data": nil})
-		return
+	// (邮箱验证码 dev 模式也跳过 — 主公要真发改回)
+	if req.EmailCode != "" {
+		emailCode, err := h.rdb.Get(context.Background(), emailCodePrefix+req.Email).Result()
+		if err != nil || emailCode != req.EmailCode {
+			c.JSON(http.StatusOK, gin.H{"code": 400, "message": "邮箱验证码错误或已过期", "data": nil})
+			return
+		}
+		h.rdb.Del(context.Background(), emailCodePrefix+req.Email)
 	}
-	emailCode, err := h.rdb.Get(context.Background(), emailCodePrefix+req.Email).Result()
-	if err != nil || emailCode != req.EmailCode {
-		c.JSON(http.StatusOK, gin.H{"code": 400, "message": "邮箱验证码错误或已过期", "data": nil})
-		return
-	}
-	h.rdb.Del(context.Background(), emailCodePrefix+req.Email)
 
 	// 检查重复
 	var count int64

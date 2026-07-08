@@ -86,6 +86,18 @@ const routes = [
         component: () => import('../views/Packages.vue'),
         meta: { title: '套餐管理' },
       },
+      {
+        path: 'user-package-usage',
+        name: 'UserPackageUsage',
+        component: () => import('../views/UserPackageUsage.vue'),
+        meta: { title: '套餐用量' },
+      },
+      {
+        path: 'realname',
+        name: 'Realname',
+        component: () => import('../views/Realname.vue'),
+        meta: { title: '实名认证' },
+      },
     ],
   },
   {

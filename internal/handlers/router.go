@@ -62,6 +62,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, ch interface{}, rdb interface{
 		auth.POST("/logout", authHandler.Logout)
 		auth.GET("/captcha", authHandler.Captcha)
 		auth.POST("/verify-code", authHandler.VerifyCode)
+		auth.POST("/send-email-code", authHandler.SendEmailCodeHandler)
 		auth.GET("/profile", authHandler.GetProfile)
 		auth.PUT("/profile", authHandler.UpdateProfile)
 		auth.PUT("/password", authHandler.ChangePassword)
@@ -109,6 +110,15 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, ch interface{}, rdb interface{
 		cert.POST("/dns-accounts", CreateDNSAccount)
 	}
 
+	// ==================== ACME / DNS 账户（文档 API.md 顶置路由）====================
+	// 顶层别名，方便前端按规范文档直接调用 /api/v1/acme-accounts、/api/v1/dns-accounts
+	{
+		api.GET("/acme-accounts", ListAcmeAccounts)
+		api.POST("/acme-accounts", CreateAcmeAccount)
+		api.GET("/dns-accounts", ListDNSAccounts)
+		api.POST("/dns-accounts", CreateDNSAccount)
+	}
+
 	// ==================== 日志管理 ====================
 	logs := api.Group("/logs")
 	{
@@ -127,7 +137,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, ch interface{}, rdb interface{
 		traffic.GET("/stats", GetTrafficStats)
 		traffic.GET("/ranking", GetTrafficRanking)
 		traffic.GET("/bandwidth", GetBandwidthTrend)
-		traffic.GET("/cache", GetCacheStats)
+		traffic.GET("/cache-hit", GetCacheStats)
 	}
 
 	// ==================== 缓存管理 ====================
@@ -166,15 +176,20 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, ch interface{}, rdb interface{
 		prot.DELETE("/blacklists/:id", BlacklistDelete)
 		prot.POST("/blacklists/import", BlacklistImport)
 		prot.GET("/blacklists/export", BlacklistExport)
+		prot.GET("/whitelist", WhitelistList)
+		prot.POST("/whitelist", WhitelistCreate)
+		prot.DELETE("/whitelist/:id", WhitelistDelete)
 	}
 
 	// ==================== 套餐管理 ====================
 	pkgHandler := NewPackageHandler(db)
+	pkgMarketHandler := NewPackageMarketHandler(db)
 	pkg := api.Group("/packages")
 	{
 		pkg.GET("", pkgHandler.List)
 		pkg.GET("/traffic", pkgHandler.TrafficPackages)
 		pkg.GET("/domain", pkgHandler.DomainPackages)
+		pkg.GET("/market", pkgMarketHandler.Market)
 		pkg.POST("/:id/purchase", pkgHandler.Purchase)
 		pkg.POST("/traffic/:id/purchase", pkgHandler.PurchaseTraffic)
 		pkg.POST("/domain/:id/purchase", pkgHandler.PurchaseDomain)
@@ -294,6 +309,8 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, ch interface{}, rdb interface{
 		admin.GET("/system/backup", SystemBackupList)
 		admin.POST("/system/backup", SystemBackupCreate)
 		admin.POST("/system/backup/:id/restore", SystemBackupRestore)
+		admin.GET("/system/backup/:id/download", SystemBackupDownload)
+		admin.DELETE("/system/backup/:id", SystemBackupDelete)
 		admin.GET("/system/version", SystemVersion)
 		admin.POST("/system/upgrade", SystemUpgrade)
 	}
